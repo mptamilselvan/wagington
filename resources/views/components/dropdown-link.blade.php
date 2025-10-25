@@ -1,0 +1,1 @@
+<a {{ $attributes->merge(['class' => 'top-nav-menu-item']) }}>{{ $slot }}</a>

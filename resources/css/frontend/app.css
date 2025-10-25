@@ -1,0 +1,562 @@
+@import url('https://fonts.googleapis.com/css2?family=Rubik:wght@300;400;500;600;700&display=swap');
+
+@import "@fortawesome/fontawesome-free/css/all.min.css";
+
+@tailwind base;
+@tailwind components;
+@tailwind utilities;
+
+@font-face {
+    font-family: "Rubik", sans-serif;
+    src: local("Rubik Regular"), local("Rubik-Regular"),
+        url("https://fonts.googleapis.com/css2?family=Rubik:wght@300;400;500;600;700&display=swap")
+            format("woff2");
+    font-style: normal;
+}
+
+
+.rubik {
+    font-family: "Rubik", sans-serif;
+    font-weight: 400;
+}
+
+.rubik-300 {
+    font-family: "Rubik", sans-serif;
+    font-weight: 300;
+}
+
+.rubik-500 {
+    font-family: "Rubik", sans-serif;
+    font-weight: 500;
+}
+
+.rubik-600 {
+    font-family: "Rubik", sans-serif;
+    font-weight: 600;
+}
+.rubik-700 {
+    font-family: "Rubik", sans-serif;
+    font-weight: 700;
+}
+
+.rubik-800 {
+    font-family: "Rubik", sans-serif;
+    font-weight: 800;
+}
+
+/* scroll class */
+
+/* width */
+.scroll::-webkit-scrollbar {
+    width: 4px;
+    height: 2px;
+}
+
+/* Track */
+.scroll::-webkit-scrollbar-track {
+    border-radius: 20px;
+    background: #eeeeee;
+    margin: 1.5px !important;
+}
+
+/* Handle */
+.scroll::-webkit-scrollbar-thumb {
+    background: #d3d3d3;
+    border-radius: 20px;
+}
+
+/* Handle on hover */
+.scroll::-webkit-scrollbar-thumb:hover {
+    background: #d4d4d4;
+}
+
+/* Set Rubik as the default font family for the entire project */
+html {
+    @apply rubik;
+}
+
+/* Base styles for common elements */
+@layer base {
+    body {
+        font-family: 'Rubik', sans-serif;
+        font-weight: 400;
+        font-size: 16px;
+    }
+
+    h1, h2, h3, h4, h5, h6 {
+        font-family: 'Rubik', sans-serif;
+        font-weight: 600;
+    }
+
+    p {
+        font-family: 'Rubik', sans-serif;
+        font-weight: 400;
+        /* font-size: 18px; */ /* Large font size for better readability */
+        line-height: 1.6;
+    }
+
+    nav, nav a {
+        font-family: 'Rubik', sans-serif;
+        font-weight: 400;
+        font-size: 20px; /* Larger font size for nav elements */
+    }
+
+    label {
+        font-family: 'Rubik', sans-serif;
+        font-weight: 400;
+        font-size: 16px;
+    }
+
+    input, textarea, select {
+        font-family: 'Rubik', sans-serif;
+        font-weight: 400;
+        font-size: 18px;
+    }
+
+    button {
+        font-family: 'Rubik', sans-serif;
+        font-weight: 500;
+        font-size: 16px;
+    }
+
+    span {
+        font-family: 'Rubik', sans-serif;
+    }
+}
+
+/* COMPONENTS  can be overriden by inline classes */
+
+@layer components {
+    /* table */
+    .table {
+        @apply min-w-full mb-3 text-gray-place overflow-hidden border border-separate rounded-lg table-fixed  border-spacing-0 border-[#E5E7EB];
+    }
+
+    .th {
+        @apply text-[11px] lg:text-[12px] xl:text-[13px]   tracking-wide uppercase font-medium text-left  py-[8px] md:py-[10px] lg:py-[12px] px-[16px]  lg:px-[19px];
+    }
+
+    .td {
+        @apply text-[13.2px] lg:text-[14px] border-t   py-[7px] md:py-[9px] lg:py-[11px] px-[16px]  lg:px-[19px];
+    }
+
+    tr:nth-child(even) {@apply bg-[#F8F9FA]}
+
+    /* inputs */
+    /* rounded-[6px] */
+    .form-input {
+        @apply rounded-xl   read-only:bg-[#FAFAFA] read-only:focus:border-[#D1D5DB] placeholder:capitalize disabled:placeholder:text-gray-105 border-[1px]  disabled:focus:ring-0 border-gray-105  placeholder:font-[400] placeholder:text-[14px]  sm:placeholder:text-[14px] rubik  text-[14px] sm:text-[14px] placeholder:text-[#808B9A] text-gray-input  h-[42px]  focus:border-primary-blue w-full focus:ring-0;
+    }
+
+    .form-input-error {
+        @apply rounded-[6px] text-[18px] text-gray-input border-red-error h-[45px] border px-2 focus:border-primary-blue w-full focus:outline-none focus:ring-0;
+    }
+
+    /* password */
+    .form-password {
+        @apply rounded-[6px] font-[sans-serif] tracking-[0.111em] text-[18px] text-base text-gray-input border-gray-105 h-[45px] border focus:border-primary-blue w-full focus:ring-0;
+    }
+
+    .form-password-error {
+        @apply rounded-[6px] font-[sans-serif] tracking-[0.111em] text-[18px] text-base text-red-[#7F1D1D] border-red-error h-[45px] border focus:border-primary-blue w-full focus:ring-0;
+    }
+
+     /* dropdown */
+     .form-select {
+        @apply rounded-xl disabled:bg-[#FAFAFA] disabled:focus:border-[#D1D5DB]  placeholder:capitalize disabled:placeholder:text-gray-105 disabled:text-gray-107 border-[1px]  disabled:focus:ring-0 border-gray-105  placeholder:font-[400] placeholder:text-[14px] rubik text-gray-input text-[14px] placeholder:text-[#808B9A]  h-[42px]  focus:border-primary-blue w-full focus:ring-0;
+    }
+
+    select:has(option[value=""]:checked) {
+        color: #808B9A;
+    }
+
+    input[type="date"]:invalid {
+        color: #808B9A;
+    }
+    input[type="date"]:disabled,
+input[type="date"][readonly] {
+    color: #808B9A !important; /* keep same muted color */
+}
+    
+    /* textarea */
+    .form-textarea {
+        @apply rounded-xl read-only:bg-[#FAFAFA] read-only:focus:border-[#D1D5DB] resize-y  placeholder:capitalize  placeholder:text-[#808B9A] placeholder:font-[400] placeholder:text-[14px] text-[#808B9A] text-[16px] text-gray-input border-gray-105  border focus:border-primary-blue w-full focus:ring-0;
+    }
+
+    /* radio */
+    .form-radio {
+        @apply w-[19px] m-1 h-[19px] border focus:ring-offset-0 focus:border-blue-focus focus:ring-0 border-gray-105 text-primary-blue;
+    }
+
+    /* checkbox */
+    .form-checkbox {
+        @apply w-[18px] m-1 h-[18px] rounded-[4px] border focus:ring-offset-0 focus:border-blue-focus focus:ring-0 border-gray-105 text-primary-blue;
+    }
+
+    /* blue buttons */
+    .button-primary {
+        @apply hover:bg-blue-hover text-[14px] md:text-[15px] lg:text-[16px] disabled:bg-blue-disabled  active:bg-blue-focus h-[50px] bg-primary-blue font-bold  capitalize tracking-wider  text-white w-[261px] rounded-[6px] focus:outline-none focus:ring-0;
+    }
+
+    .button-primary-small {
+        @apply button-primary rounded-[8px] sm:whitespace-nowrap leading-tight px-1 h-[36px] w-full  max-w-[123px]  lg:w-[123px] text-[13px] lg:text-[14px];
+    }
+
+    .button-secondary {
+        @apply border-primary-blue disabled:text-blue-disabled disabled:border-blue-disabled disabled:hover:bg-white border hover:bg-blue-hover active:bg-blue-focus h-[50px]  font-bold  capitalize tracking-wider text-[14px] md:text-[15px] lg:text-[16px] text-primary-blue hover:text-white w-[261px] rounded-[6px] focus:outline-none focus:ring-0;
+    }
+
+    .button-secondary-small {
+        @apply button-secondary rounded-[8px] h-[36px] w-[123px] text-[13px] lg:text-[14px];
+    }
+
+    /* red buttons */
+
+    .button-primary-red {
+        @apply hover:bg-state-red text-[14px] md:text-[15px] lg:text-[16px] disabled:bg-blue-disabled  active:bg-state-red h-[50px] bg-state-red font-bold  capitalize tracking-wider  text-white w-[261px] rounded-[6px] focus:outline-none focus:ring-0;
+    }
+
+    .button-primary-red-small {
+        @apply hover:bg-state-red text-[14px] md:text-[15px] lg:text-[16px] disabled:bg-blue-disabled  active:bg-state-red h-[36px] bg-state-red font-bold  capitalize tracking-wider  text-white w-[123px] rounded-[8px] focus:outline-none focus:ring-0;
+    }
+
+    .button-secondary-red {
+        @apply border-state-red disabled:text-blue-disabled disabled:border-blue-disabled disabled:hover:bg-white border hover:bg-state-red active:bg-state-red h-[50px]  font-bold  capitalize tracking-wider text-[14px] md:text-[15px] lg:text-[16px] text-state-red hover:text-white w-[261px] rounded-[6px] focus:outline-none focus:ring-0;
+    }
+
+    .button-strip {
+        @apply focus:border-none focus:outline-none focus:ring-0 focus:ring-offset-0;
+    }
+
+    /* text buttons */
+
+    .text-button-underline {
+        @apply text-primary-blue capitalize tracking-wide  text-[14px] md:text-[15px] lg:text-[16px] disabled:text-blue-disabled font-medium  active:text-blue-focus underline-offset-[1.5px]  block underline     hover:text-blue-focus   focus:border-none focus:ring-0 focus:outline-none;
+        text-decoration-thickness: 0.9px;
+    }
+
+    .text-button {
+        @apply text-primary-blue  text-[14px] tracking-wide md:text-[15px] lg:text-[16px] disabled:text-blue-disabled active:text-blue-focus capitalize font-bold   block      hover:text-blue-hover   focus:border-none focus:ring-0 focus:outline-none;
+        text-decoration-thickness: 0.9px;
+    }
+
+    /* text button green */
+    .text-button-green {
+        @apply text-state-green/90  text-[14px] tracking-wide md:text-[15px] lg:text-[16px] disabled:text-blue-disabled active:text-state-green/100   capitalize font-bold   block      hover:text-state-green/70     focus:border-none focus:ring-0 focus:outline-none;
+        text-decoration-thickness: 0.9px;
+    }
+
+    /* input label */
+
+    .label {
+        @apply inline-block font-medium tracking-wide  text-gray-700 text-[13px] lg:text-[14.3px] first-letter:capitalize mb-2;
+    }
+    .label-blue {
+        @apply inline-block font-medium tracking-wide  text-blue-label text-[13px] lg:text-[14.3px] capitalize;
+    }
+
+    /* auth headers */
+
+    .auth-header {
+        @apply font-bold capitalize text-[26px] md:text-[30px] lg:text-[32px] text-[#050505] lg:text-[#3E3E3E];
+    }
+
+    .auth-sub {
+        @apply font-normal text-[#232323B2]/70 text-[15px] lg:text-[16px];
+    }
+
+    /* validation message */
+
+    .error-message {
+        @apply text-[#EF4444] font-normal text-[13px] lg:text-[14.3px] tracking-wide;
+    }
+
+    .success-message {
+        @apply text-state-green font-normal text-[13px] lg:text-[14.3px] tracking-wide;
+    }
+
+    /* filter */
+
+    .filter-sub-heading {
+        @apply text-[#595959] text-[15px] lg:text-[16px] font-semibold capitalize;
+    }
+
+    .filter-label {
+        @apply font-normal text-[15px] text-[#595959];
+    }
+
+    /* header */
+
+    .header-title {
+        @apply font-bold   text-[#060D01] text-[22px] md:text-[24px] xl:text-[32px];
+    }
+
+    .header-camp-sub {
+        @apply font-medium  text-[8px] sm:text-[10px]  xl:text-[12px]  text-[#595959] uppercase;
+    }
+
+    /* profile */
+
+    .top-nav-menu-item {
+        @apply block w-full px-4 py-2 text-sm leading-5 text-left text-gray-700 transition duration-150 ease-in-out hover:bg-gray-100 focus:outline-none focus:bg-gray-100;
+    }
+
+    /* Custom Background Colors */
+    .bg-light-gray {
+        background-color: #F5F5F7;
+    }
+
+    .bg-primary-blue {
+        background-color: #4785FF;
+    }
+
+    .bg-pagination {
+        background-color: #FAFBFC;
+    }
+
+    /* Custom Border Colors */
+    .border-light-gray {
+        border-color: #F3F4F6;
+    }
+
+    /* Font Families */
+    .font-rubik {
+        font-family: 'Rubik', sans-serif;
+    }
+
+    .font-rubik-400 {
+        font-family: 'Rubik', sans-serif;
+        font-weight: 400;
+    }
+
+    .font-rubik-600 {
+        font-family: 'Rubik', sans-serif;
+        font-weight: 600;
+    }
+
+    /* Additional utility classes for inline styles */
+    .font-rubik-select {
+        font-family: 'Rubik', sans-serif;
+        min-width: 120px;
+    }
+
+    .padding-left-31 {
+        padding-left: 31px;
+    }
+
+    .font-montserrat {
+        font-family: 'Montserrat', sans-serif;
+    }
+
+    .font-rubik-700 {
+        font-family: 'Rubik', sans-serif;
+        font-weight: 700;
+    }
+
+    /* Utility Classes */
+    .pointer-events-auto-important {
+        pointer-events: auto !important;
+    }
+
+    .min-w-120 {
+        min-width: 120px;
+    }
+
+    /* Background Images */
+    .bg-banner {
+        background-image: url('/images/banner.png');
+        background-size: cover;
+        background-position: center;
+        background-repeat: no-repeat;
+    }
+
+
+
+
+    /* Ensure Rubik font classes are properly available */
+    .font-rubik-label {
+        font-family: 'Rubik', sans-serif;
+        font-weight: 500;
+    }
+
+    .font-rubik-input {
+        font-family: 'Rubik', sans-serif;
+        font-weight: 400;
+    }
+
+    .font-rubik-error {
+        font-family: 'Rubik', sans-serif;
+        font-weight: 400;
+    }
+
+    .font-rubik-button {
+        font-family: 'Rubik', sans-serif;
+        font-weight: 600;
+    }
+}
+
+.nav-lay {
+    @apply xl:ml-[316px] lg:ml-[296px];
+}
+
+.nav-left {
+    @apply left-0 xl:left-[316px] lg:left-[296px];
+}
+
+.x-lay {
+    @apply px-[10px] sm:px-[18px] md:px-[26px];
+}
+
+
+/* Additional Rubik Font Weight Utilities */
+.font-rubik-400 {
+    font-family: 'Rubik', sans-serif;
+    font-weight: 400;
+}
+
+.font-rubik-500 {
+    font-family: 'Rubik', sans-serif;
+    font-weight: 500;
+}
+
+.font-rubik-600 {
+    font-family: 'Rubik', sans-serif;
+    font-weight: 600;
+}
+
+.font-rubik-700 {
+    font-family: 'Rubik', sans-serif;
+    font-weight: 700;
+}
+
+/* Transform Utilities */
+.transform-center-y {
+    transform: translateY(-50%);
+}
+
+.transform-center-x {
+    transform: translateX(-50%);
+}
+
+.transform-center {
+    transform: translate(-50%, -50%);
+}
+
+.transform-slide-left {
+    transform: translateX(-50%);
+}
+
+.transform-slide-right {
+    transform: translateX(0%);
+}
+
+
+
+/* Custom Background Colors */
+.bg-light-gray {
+    background-color: #F5F5F7;
+}
+
+.bg-primary-blue {
+    background-color: #4785FF;
+}
+
+.bg-pagination {
+    background-color: #FAFBFC;
+}
+
+/* Form Component Utilities */
+.form-field-base {
+    font-family: 'Rubik', sans-serif;
+    font-weight: 400;
+}
+
+.form-label-base {
+    font-family: 'Rubik', sans-serif;
+    font-weight: 500;
+}
+
+.form-error-base {
+    font-family: 'Rubik', sans-serif;
+    font-weight: 400;
+}
+
+.form-help-text {
+    font-family: 'Rubik', sans-serif;
+    font-weight: 400;
+}
+
+/* Specific Component Classes */
+.auth-title {
+    font-family: 'Rubik', sans-serif;
+    font-weight: 700;
+}
+
+.auth-subtitle {
+    font-family: 'Rubik', sans-serif;
+    font-weight: 400;
+}
+
+.nav-link {
+    font-family: 'Rubik', sans-serif;
+    font-weight: 600;
+}
+
+.profile-section-title {
+    font-family: 'Rubik', sans-serif;
+    font-weight: 700;
+}
+
+.profile-section-subtitle {
+    font-family: 'Rubik', sans-serif;
+    font-weight: 400;
+}
+
+/* Auto-import pointer events utilities */
+.pointer-events-auto-important {
+    pointer-events: auto !important;
+}
+
+/* Min width utilities */
+.min-w-120 {
+    min-width: 120px;
+}
+
+.min-w-140 {
+    min-width: 140px;
+}
+
+/* Display utilities */
+.display-none {
+    display: none;
+}
+
+.tooltip {
+    position: relative;
+    display: inline-block;
+    /* border-bottom: 1px dotted black; */
+    cursor: pointer;
+    float: right;
+  }
+  
+  .tooltiptext {
+    visibility: hidden;
+    width: 130px;
+    background-color: #F2F2F2;
+    color: #808B9A;
+    border-radius: 6px;
+    padding: 10px;
+    position: absolute;
+    z-index: 1;
+    bottom: 100%;
+    right: 0%;
+    margin-left: -65px;
+    font-size: 14px;
+    width: 349px;
+    height: 80px;
+  }
+  
+  .tooltip:hover .tooltiptext {
+    visibility: visible;
+  }
+
