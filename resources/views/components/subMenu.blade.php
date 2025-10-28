@@ -71,7 +71,6 @@
 @if ($subMenuType == 'roomSettings')
     @props([
         'subMenu' => [
-            ['key' => 'species-size-settings', 'value' => 'Species Size Settings', 'route' => route('species-size-settings')],
             ['key' => 'pet-size-limit-settings', 'value' => 'Pet Size Limit Settings', 'route' => route('pet-size-limit-settings')],
             ['key' => 'cancel-setting', 'value' => 'Cancellation & Refund Settings', 'route' => route('cancel-setting')],
         ],

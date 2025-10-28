@@ -196,11 +196,8 @@
 
                                 <!-- Category path -->
                                 <td class="px-6 py-4 whitespace-nowrap">
-                                    @php
-                                        $species = $roomType->species->name;
-                                    @endphp
                                     <div class="text-sm text-gray-700">
-                                        {{ $species }}
+                                        {{ $roomType->species?->name ?? 'No Species' }}
                                     </div>
                                 </td>
 

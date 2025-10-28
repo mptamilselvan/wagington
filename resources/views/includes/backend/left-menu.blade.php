@@ -167,14 +167,14 @@
                                 </li>
 
                                 @php
-                                // Suites submenu logic
+                                // Room Management submenu logic
                                 $showRoomSubmenu = 'hidden';
                                 $highlightRoomManagementMenu = false;
                                 $highlightRoomMenu = false;
                                 $highlightRoomTypeMenu = false;
                                 $highlightRoomSettingsMenu = false;
                                 $highlightCancelSettingMenu = false;
-                                $roomMenus = ['rooms','room-types','cancel-setting','species-size-settings','pet-size-limit-settings'];
+                                $roomMenus = ['rooms','room-types'];
                                 if (in_array(request()->segment(2), $roomMenus)) {
                                     $showRoomSubmenu = '';
                                     //$highlightRoomMenu = true;
@@ -183,16 +183,7 @@
                                         $highlightRoomMenu = true;
                                     } elseif (request()->segment(2) == 'room-types') {
                                         $highlightRoomTypeMenu = true;
-                                    } elseif (request()->segment(2) == 'cancel-setting') {
-                                        $highlightRoomSettingsMenu = true;
-                                        $highlightCancelSettingMenu = true;
-                                    } elseif (request()->segment(2) == 'species-size-settings') {
-                                        $highlightRoomSettingsMenu = true;
-                                        $highlightSpeciesSizeSettingMenu = true;
-                                    } elseif (request()->segment(2) == 'pet-size-limit-settings') {
-                                        $highlightRoomSettingsMenu = true;
-                                        $highlightPetSizeLimitSettingMenu = true;
-                                    }
+                                    } 
                                 }
                                 @endphp
                                 <li>
@@ -227,12 +218,7 @@
                                                     Rooms
                                                 </a>
                                             </li>
-                                             <li>
-                                                <a href="{{ route('species-size-settings') }}"
-                                                    class="block rounded-md py-2 pl-9 pr-2 text-sm/6 hover:bg-white/5 hover:text-white h-10 font-semibold {{ $highlightRoomSettingsMenu ? 'bg-white/5 text-white' : 'text-gray-400' }}">
-                                                    Room Settings
-                                                </a>
-                                            </li>
+                                            
                                         </ul>
                                     </el-disclosure>
                                 </li>
@@ -245,11 +231,11 @@
                                 $highlightGeneralMenu = false;
                                 $highlightEcommerceMenu = false;
                                 $highlightServiceSettingMenu = false;
-
+                                $highlightRoomSettingsMenu = false;
                                 $settingsMenus = ['species', 'breeds', 'vaccination', 'blood-tests', 'sizes', 'pet-tags', 'vaccine-exemptions','revaluation-workflow'];
                                 $generalsettingsMenus = ['system-settings','company-settings','operational-hours','tax-settings'];
                                 $servicesettingsMenus = ['service-settings'];
-
+                                $roomsettingsMenus = ['species-size-settings','pet-size-limit-settings','cancel-setting'];
                                 $ecommercesettingsMenus = ['ecommerce-settings'];
                                   if( in_array(request()->segment(2), $settingsMenus )) {                                       
                                         $showSubmenu = '';
@@ -267,6 +253,11 @@
                                         $showSubmenu = '';
                                         $highlightMenu = true;
                                         $highlightServiceSettingMenu = true;
+                                  }
+                                  elseif(in_array(request()->segment(2), $roomsettingsMenus )) {                                       
+                                        $showSubmenu = '';
+                                        $highlightMenu = true;
+                                        $highlightRoomSettingsMenu = true;
                                   }
                                 @endphp
                             <li>
@@ -295,6 +286,12 @@
                                             <!-- 44px -->
                                             <a href="{{ route('admin.service-category') }} "
                                                 class="block rounded-md py-2 pl-9 pr-2 text-sm/6 text-gray-400 hover:bg-white/5 hover:text-white h-10 font-semibold {{ $highlightServiceSettingMenu ? 'bg-white/5 text-white' : 'text-gray-400' }}">Service Settings</a>
+                                        </li>
+                                         <li>
+                                                <a href="{{ route('pet-size-limit-settings') }}"
+                                                    class="block rounded-md py-2 pl-9 pr-2 text-sm/6 hover:bg-white/5 hover:text-white h-10 font-semibold {{ $highlightRoomSettingsMenu ? 'bg-white/5 text-white' : 'text-gray-400' }}">
+                                                    Room Settings
+                                                </a>
                                         </li>
                                         <li>
                                             <!-- 44px -->

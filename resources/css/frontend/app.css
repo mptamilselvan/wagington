@@ -1,3 +1,16 @@
+/* Hide scrollbar utility */
+.no-scrollbar {
+    -ms-overflow-style: none;
+    /* IE and Edge */
+    scrollbar-width: none;
+    /* Firefox */
+}
+
+.no-scrollbar::-webkit-scrollbar {
+    display: none;
+    /* Chrome, Safari, Opera */
+}
+
 @import url('https://fonts.googleapis.com/css2?family=Rubik:wght@300;400;500;600;700&display=swap');
 
 @import "@fortawesome/fontawesome-free/css/all.min.css";
@@ -9,8 +22,7 @@
 @font-face {
     font-family: "Rubik", sans-serif;
     src: local("Rubik Regular"), local("Rubik-Regular"),
-        url("https://fonts.googleapis.com/css2?family=Rubik:wght@300;400;500;600;700&display=swap")
-            format("woff2");
+        url("https://fonts.googleapis.com/css2?family=Rubik:wght@300;400;500;600;700&display=swap") format("woff2");
     font-style: normal;
 }
 
@@ -34,6 +46,7 @@
     font-family: "Rubik", sans-serif;
     font-weight: 600;
 }
+
 .rubik-700 {
     font-family: "Rubik", sans-serif;
     font-weight: 700;
@@ -83,7 +96,12 @@ html {
         font-size: 16px;
     }
 
-    h1, h2, h3, h4, h5, h6 {
+    h1,
+    h2,
+    h3,
+    h4,
+    h5,
+    h6 {
         font-family: 'Rubik', sans-serif;
         font-weight: 600;
     }
@@ -91,14 +109,17 @@ html {
     p {
         font-family: 'Rubik', sans-serif;
         font-weight: 400;
-        /* font-size: 18px; */ /* Large font size for better readability */
+        /* font-size: 18px; */
+        /* Large font size for better readability */
         line-height: 1.6;
     }
 
-    nav, nav a {
+    nav,
+    nav a {
         font-family: 'Rubik', sans-serif;
         font-weight: 400;
-        font-size: 20px; /* Larger font size for nav elements */
+        font-size: 20px;
+        /* Larger font size for nav elements */
     }
 
     label {
@@ -107,7 +128,9 @@ html {
         font-size: 16px;
     }
 
-    input, textarea, select {
+    input,
+    textarea,
+    select {
         font-family: 'Rubik', sans-serif;
         font-weight: 400;
         font-size: 18px;
@@ -127,25 +150,28 @@ html {
 /* COMPONENTS  can be overriden by inline classes */
 
 @layer components {
+
     /* table */
     .table {
-        @apply min-w-full mb-3 text-gray-place overflow-hidden border border-separate rounded-lg table-fixed  border-spacing-0 border-[#E5E7EB];
+        @apply min-w-full mb-3 text-gray-place overflow-hidden border border-separate rounded-lg table-fixed border-spacing-0 border-[#E5E7EB];
     }
 
     .th {
-        @apply text-[11px] lg:text-[12px] xl:text-[13px]   tracking-wide uppercase font-medium text-left  py-[8px] md:py-[10px] lg:py-[12px] px-[16px]  lg:px-[19px];
+        @apply text-[11px] lg:text-[12px] xl:text-[13px] tracking-wide uppercase font-medium text-left py-[8px] md:py-[10px] lg:py-[12px] px-[16px] lg:px-[19px];
     }
 
     .td {
-        @apply text-[13.2px] lg:text-[14px] border-t   py-[7px] md:py-[9px] lg:py-[11px] px-[16px]  lg:px-[19px];
+        @apply text-[13.2px] lg:text-[14px] border-t py-[7px] md:py-[9px] lg:py-[11px] px-[16px] lg:px-[19px];
     }
 
-    tr:nth-child(even) {@apply bg-[#F8F9FA]}
+    tr:nth-child(even) {
+        @apply bg-[#F8F9FA]
+    }
 
     /* inputs */
     /* rounded-[6px] */
     .form-input {
-        @apply rounded-xl   read-only:bg-[#FAFAFA] read-only:focus:border-[#D1D5DB] placeholder:capitalize disabled:placeholder:text-gray-105 border-[1px]  disabled:focus:ring-0 border-gray-105  placeholder:font-[400] placeholder:text-[14px]  sm:placeholder:text-[14px] rubik  text-[14px] sm:text-[14px] placeholder:text-[#808B9A] text-gray-input  h-[42px]  focus:border-primary-blue w-full focus:ring-0;
+        @apply rounded-xl read-only:bg-[#FAFAFA] read-only:focus:border-[#D1D5DB] placeholder:capitalize disabled:placeholder:text-gray-105 border-[1px] disabled:focus:ring-0 border-gray-105 placeholder:font-[400] placeholder:text-[14px] sm:placeholder:text-[14px] rubik text-[14px] sm:text-[14px] placeholder:text-[#808B9A] text-gray-input h-[42px] focus:border-primary-blue w-full focus:ring-0;
     }
 
     .form-input-error {
@@ -161,9 +187,9 @@ html {
         @apply rounded-[6px] font-[sans-serif] tracking-[0.111em] text-[18px] text-base text-red-[#7F1D1D] border-red-error h-[45px] border focus:border-primary-blue w-full focus:ring-0;
     }
 
-     /* dropdown */
-     .form-select {
-        @apply rounded-xl disabled:bg-[#FAFAFA] disabled:focus:border-[#D1D5DB]  placeholder:capitalize disabled:placeholder:text-gray-105 disabled:text-gray-107 border-[1px]  disabled:focus:ring-0 border-gray-105  placeholder:font-[400] placeholder:text-[14px] rubik text-gray-input text-[14px] placeholder:text-[#808B9A]  h-[42px]  focus:border-primary-blue w-full focus:ring-0;
+    /* dropdown */
+    .form-select {
+        @apply rounded-xl disabled:bg-[#FAFAFA] disabled:focus:border-[#D1D5DB] placeholder:capitalize disabled:placeholder:text-gray-105 disabled:text-gray-107 border-[1px] disabled:focus:ring-0 border-gray-105 placeholder:font-[400] placeholder:text-[14px] rubik text-gray-input text-[14px] placeholder:text-[#808B9A] h-[42px] focus:border-primary-blue w-full focus:ring-0;
     }
 
     select:has(option[value=""]:checked) {
@@ -173,14 +199,16 @@ html {
     input[type="date"]:invalid {
         color: #808B9A;
     }
+
     input[type="date"]:disabled,
-input[type="date"][readonly] {
-    color: #808B9A !important; /* keep same muted color */
-}
-    
+    input[type="date"][readonly] {
+        color: #808B9A !important;
+        /* keep same muted color */
+    }
+
     /* textarea */
     .form-textarea {
-        @apply rounded-xl read-only:bg-[#FAFAFA] read-only:focus:border-[#D1D5DB] resize-y  placeholder:capitalize  placeholder:text-[#808B9A] placeholder:font-[400] placeholder:text-[14px] text-[#808B9A] text-[16px] text-gray-input border-gray-105  border focus:border-primary-blue w-full focus:ring-0;
+        @apply rounded-xl read-only:bg-[#FAFAFA] read-only:focus:border-[#D1D5DB] resize-y placeholder:capitalize placeholder:text-[#808B9A] placeholder:font-[400] placeholder:text-[14px] text-[#808B9A] text-[16px] text-gray-input border-gray-105 border focus:border-primary-blue w-full focus:ring-0;
     }
 
     /* radio */
@@ -195,15 +223,15 @@ input[type="date"][readonly] {
 
     /* blue buttons */
     .button-primary {
-        @apply hover:bg-blue-hover text-[14px] md:text-[15px] lg:text-[16px] disabled:bg-blue-disabled  active:bg-blue-focus h-[50px] bg-primary-blue font-bold  capitalize tracking-wider  text-white w-[261px] rounded-[6px] focus:outline-none focus:ring-0;
+        @apply hover:bg-blue-hover text-[14px] md:text-[15px] lg:text-[16px] disabled:bg-blue-disabled active:bg-blue-focus h-[50px] bg-primary-blue font-bold capitalize tracking-wider text-white w-[261px] rounded-[6px] focus:outline-none focus:ring-0;
     }
 
     .button-primary-small {
-        @apply button-primary rounded-[8px] sm:whitespace-nowrap leading-tight px-1 h-[36px] w-full  max-w-[123px]  lg:w-[123px] text-[13px] lg:text-[14px];
+        @apply button-primary rounded-[8px] sm:whitespace-nowrap leading-tight px-1 h-[36px] w-full max-w-[123px] lg:w-[123px] text-[13px] lg:text-[14px];
     }
 
     .button-secondary {
-        @apply border-primary-blue disabled:text-blue-disabled disabled:border-blue-disabled disabled:hover:bg-white border hover:bg-blue-hover active:bg-blue-focus h-[50px]  font-bold  capitalize tracking-wider text-[14px] md:text-[15px] lg:text-[16px] text-primary-blue hover:text-white w-[261px] rounded-[6px] focus:outline-none focus:ring-0;
+        @apply border-primary-blue disabled:text-blue-disabled disabled:border-blue-disabled disabled:hover:bg-white border hover:bg-blue-hover active:bg-blue-focus h-[50px] font-bold capitalize tracking-wider text-[14px] md:text-[15px] lg:text-[16px] text-primary-blue hover:text-white w-[261px] rounded-[6px] focus:outline-none focus:ring-0;
     }
 
     .button-secondary-small {
@@ -213,15 +241,15 @@ input[type="date"][readonly] {
     /* red buttons */
 
     .button-primary-red {
-        @apply hover:bg-state-red text-[14px] md:text-[15px] lg:text-[16px] disabled:bg-blue-disabled  active:bg-state-red h-[50px] bg-state-red font-bold  capitalize tracking-wider  text-white w-[261px] rounded-[6px] focus:outline-none focus:ring-0;
+        @apply hover:bg-state-red text-[14px] md:text-[15px] lg:text-[16px] disabled:bg-blue-disabled active:bg-state-red h-[50px] bg-state-red font-bold capitalize tracking-wider text-white w-[261px] rounded-[6px] focus:outline-none focus:ring-0;
     }
 
     .button-primary-red-small {
-        @apply hover:bg-state-red text-[14px] md:text-[15px] lg:text-[16px] disabled:bg-blue-disabled  active:bg-state-red h-[36px] bg-state-red font-bold  capitalize tracking-wider  text-white w-[123px] rounded-[8px] focus:outline-none focus:ring-0;
+        @apply hover:bg-state-red text-[14px] md:text-[15px] lg:text-[16px] disabled:bg-blue-disabled active:bg-state-red h-[36px] bg-state-red font-bold capitalize tracking-wider text-white w-[123px] rounded-[8px] focus:outline-none focus:ring-0;
     }
 
     .button-secondary-red {
-        @apply border-state-red disabled:text-blue-disabled disabled:border-blue-disabled disabled:hover:bg-white border hover:bg-state-red active:bg-state-red h-[50px]  font-bold  capitalize tracking-wider text-[14px] md:text-[15px] lg:text-[16px] text-state-red hover:text-white w-[261px] rounded-[6px] focus:outline-none focus:ring-0;
+        @apply border-state-red disabled:text-blue-disabled disabled:border-blue-disabled disabled:hover:bg-white border hover:bg-state-red active:bg-state-red h-[50px] font-bold capitalize tracking-wider text-[14px] md:text-[15px] lg:text-[16px] text-state-red hover:text-white w-[261px] rounded-[6px] focus:outline-none focus:ring-0;
     }
 
     .button-strip {
@@ -231,28 +259,29 @@ input[type="date"][readonly] {
     /* text buttons */
 
     .text-button-underline {
-        @apply text-primary-blue capitalize tracking-wide  text-[14px] md:text-[15px] lg:text-[16px] disabled:text-blue-disabled font-medium  active:text-blue-focus underline-offset-[1.5px]  block underline     hover:text-blue-focus   focus:border-none focus:ring-0 focus:outline-none;
+        @apply text-primary-blue capitalize tracking-wide text-[14px] md:text-[15px] lg:text-[16px] disabled:text-blue-disabled font-medium active:text-blue-focus underline-offset-[1.5px] block underline hover:text-blue-focus focus:border-none focus:ring-0 focus:outline-none;
         text-decoration-thickness: 0.9px;
     }
 
     .text-button {
-        @apply text-primary-blue  text-[14px] tracking-wide md:text-[15px] lg:text-[16px] disabled:text-blue-disabled active:text-blue-focus capitalize font-bold   block      hover:text-blue-hover   focus:border-none focus:ring-0 focus:outline-none;
+        @apply text-primary-blue text-[14px] tracking-wide md:text-[15px] lg:text-[16px] disabled:text-blue-disabled active:text-blue-focus capitalize font-bold block hover:text-blue-hover focus:border-none focus:ring-0 focus:outline-none;
         text-decoration-thickness: 0.9px;
     }
 
     /* text button green */
     .text-button-green {
-        @apply text-state-green/90  text-[14px] tracking-wide md:text-[15px] lg:text-[16px] disabled:text-blue-disabled active:text-state-green/100   capitalize font-bold   block      hover:text-state-green/70     focus:border-none focus:ring-0 focus:outline-none;
+        @apply text-state-green/90 text-[14px] tracking-wide md:text-[15px] lg:text-[16px] disabled:text-blue-disabled active:text-state-green/100 capitalize font-bold block hover:text-state-green/70 focus:border-none focus:ring-0 focus:outline-none;
         text-decoration-thickness: 0.9px;
     }
 
     /* input label */
 
     .label {
-        @apply inline-block font-medium tracking-wide  text-gray-700 text-[13px] lg:text-[14.3px] first-letter:capitalize mb-2;
+        @apply inline-block font-medium tracking-wide text-gray-700 text-[13px] lg:text-[14.3px] first-letter:capitalize mb-2;
     }
+
     .label-blue {
-        @apply inline-block font-medium tracking-wide  text-blue-label text-[13px] lg:text-[14.3px] capitalize;
+        @apply inline-block font-medium tracking-wide text-blue-label text-[13px] lg:text-[14.3px] capitalize;
     }
 
     /* auth headers */
@@ -288,11 +317,11 @@ input[type="date"][readonly] {
     /* header */
 
     .header-title {
-        @apply font-bold   text-[#060D01] text-[22px] md:text-[24px] xl:text-[32px];
+        @apply font-bold text-[#060D01] text-[22px] md:text-[24px] xl:text-[32px];
     }
 
     .header-camp-sub {
-        @apply font-medium  text-[8px] sm:text-[10px]  xl:text-[12px]  text-[#595959] uppercase;
+        @apply font-medium text-[8px] sm:text-[10px] xl:text-[12px] text-[#595959] uppercase;
     }
 
     /* profile */
@@ -537,9 +566,9 @@ input[type="date"][readonly] {
     /* border-bottom: 1px dotted black; */
     cursor: pointer;
     float: right;
-  }
-  
-  .tooltiptext {
+}
+
+.tooltiptext {
     visibility: hidden;
     width: 130px;
     background-color: #F2F2F2;
@@ -554,9 +583,8 @@ input[type="date"][readonly] {
     font-size: 14px;
     width: 349px;
     height: 80px;
-  }
-  
-  .tooltip:hover .tooltiptext {
-    visibility: visible;
-  }
+}
 
+.tooltip:hover .tooltiptext {
+    visibility: visible;
+}

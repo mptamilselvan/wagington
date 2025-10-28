@@ -46,6 +46,8 @@ class RoomTypeModel extends Model
         'seo_keywords' => 'string',
         'slug' => 'string',
         'status' => 'string',
+        'room_attributes' => 'array',
+        'room_amenities' => 'array',
         'images' => 'array',
         'service_addons' => 'array',
         'aggreed_terms' => 'array',

@@ -61,15 +61,8 @@
                                 @foreach($sizes as $size)
                                     <div class="flex items-center justify-between p-4 border border-gray-200 rounded-lg hover:bg-gray-50">
                                         <div class="flex items-center space-x-4">
-                                            @if($size->color)
-                                                <div class="w-6 h-6 rounded-full border border-gray-300" 
-                                                     style="background-color: {{ $size->color }}"></div>
-                                            @endif
                                             <div>
-                                                <span class="font-medium text-gray-900 text-lg">{{ $size->size }}</span>
-                                                @if($size->description)
-                                                    <p class="text-sm text-gray-500">{{ $size->description }}</p>
-                                                @endif
+                                                <span class="font-medium text-gray-900 text-lg">{{ $size->name }}</span>
                                             </div>
                                         </div>
                                         <div class="flex items-center space-x-3">

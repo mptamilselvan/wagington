@@ -39,8 +39,10 @@ class RoomType extends Component
     public $slug = '';
     public $species_id = null;
     public $room_types = [];
-    public $room_attributes = null;
-    public $room_amenities = null;
+    public $room_attributes = [];
+    public $room_amenities = [];
+    public $newAttribute = '';
+    public $newAmenity = '';
     public $room_description = null;
     public $room_overview = null;
     public $room_highlights = null;
@@ -127,8 +129,10 @@ class RoomType extends Component
         $this->slug = '';
         $this->species_id = '';
         $this->room_type_id = null;
-        $this->room_attributes = '';
-        $this->room_amenities = '';
+        $this->room_attributes = [];
+        $this->room_amenities = [];
+        $this->newAttribute = '';
+        $this->newAmenity = '';
         $this->room_description = '';
         $this->room_overview = '';
         $this->room_highlights = '';
@@ -159,20 +163,20 @@ class RoomType extends Component
      * @return void
      */
     public function setDefaltValues(){
-        $this->name = 'hotel1';
-        $this->slug = 'hotel1';
+        $this->name = '';
+        $this->slug = '';
         $this->species_id = 1;
         $this->room_type_id = 1;
-        $this->room_attributes = "Room attributes";
-        $this->room_amenities = "Room amenities";
-        $this->room_description = "Room description";
-        $this->room_overview = "Room overview";
+        $this->room_attributes = [];
+        $this->room_amenities = [];
+        $this->room_description = "";
+        $this->room_overview = "";
         $this->room_highlights = null;
-        $this->room_terms_and_conditions = "Room terms and conditions";
+        $this->room_terms_and_conditions = "";
         $this->images = [];
         $this->service_addons = [];
         $this->aggreed_terms = [
-            ['content' => 'Agreed terms', 'document' => null]
+            ['content' => '', 'document' => null]
         ];
         $this->evaluation_required = false;
         $this->default_clean_minutes = null;
@@ -202,6 +206,7 @@ class RoomType extends Component
      */
     public function editRoomType($roomTypeId)
     {
+        $this->resetForm();
         $roomType = RoomTypeModel::findOrFail($roomTypeId);
         $this->editingRoomType = $roomType;
         
@@ -210,8 +215,11 @@ class RoomType extends Component
         $this->name = $roomType->name;
         $this->slug = $roomType->slug;
         $this->species_id = $roomType->species_id;
-        $this->room_attributes = $roomType->room_attributes;
-        $this->room_amenities = $roomType->room_amenities;
+        // Handle JSON data for room_attributes and room_amenities
+        $this->room_attributes = $this->parseJsonField($roomType->room_attributes);
+        $this->room_amenities = $this->parseJsonField($roomType->room_amenities);
+        $this->newAttribute = '';
+        $this->newAmenity = '';
         $this->room_description = $roomType->room_description;
         $this->room_overview = $roomType->room_overview;
         $this->room_highlights = $roomType->room_highlights;
@@ -569,16 +577,62 @@ class RoomType extends Component
     // Document management methods for agreed terms
     /**
      * Update the agreed terms for the component
+     * @param mixed $value
+     * @param string $key
      * @return void
      */
-    public function updatedAgreedTerms()
+    /**
+     * Handle individual document updates for agreed terms
+     * @param mixed $value
+     * @param string $key
+     * @return void
+     */
+    public function updatedAggreedTerms($value = null, $key = null)
     {
-        $this->documentPreviews = [];
-        foreach ($this->aggreed_terms as $index => $term) {
-            if (isset($term['document']) && $term['document']) {
-                $this->documentPreviews[$index] = $term['document']->temporaryUrl();
+        // If key is provided, handle individual field updates
+        if ($key !== null) {
+            // Only handle document updates, not content updates
+            if (str_contains($key, '.document')) {
+                // Extract the index from the key (e.g., "0.document" -> 0)
+                $index = explode('.', $key)[0];
+                
+                if ($value) {
+                    // Generate preview URL for the uploaded document
+                    $this->documentPreviews[$index] = $value->temporaryUrl();
+                } else {
+                    // Clear preview if document is removed
+                    unset($this->documentPreviews[$index]);
+                }
+            }
+        } else {
+            // Handle array updates (legacy behavior)
+            $this->documentPreviews = [];
+            foreach ($this->aggreed_terms as $index => $term) {
+                if (isset($term['document']) && $term['document']) {
+                    $this->documentPreviews[$index] = $term['document']->temporaryUrl();
+                } else {
+                    $this->documentPreviews[$index] = null;
+                }
+            }
+        }
+    }
+
+    /**
+     * Alternative approach: Handle document updates via updated hook
+     * @param mixed $value
+     * @param string $key
+     * @return void
+     */
+    public function updated($property, $value)
+    {
+        // Handle document updates
+        if (str_contains($property, 'aggreed_terms') && str_contains($property, 'document')) {
+            $index = explode('.', $property)[1]; // Get index from property name
+            
+            if ($value) {
+                $this->documentPreviews[$index] = $value->temporaryUrl();
             } else {
-                $this->documentPreviews[$index] = null;
+                unset($this->documentPreviews[$index]);
             }
         }
     }
@@ -996,6 +1050,85 @@ class RoomType extends Component
         }
         
         return $query->exists();
+    }
+
+    /**
+     * Parse JSON field data - handles both JSON arrays and legacy text data
+     */
+    private function parseJsonField($data)
+    {
+        if (empty($data)) {
+            return [];
+        }
+
+        // If it's already an array, return it
+        if (is_array($data)) {
+            return $data;
+        }
+
+        // Try to decode as JSON
+        $decoded = json_decode($data, true);
+        if (json_last_error() === JSON_ERROR_NONE && is_array($decoded)) {
+            // If it's a JSON object with 'text' key (from migration), extract the text
+            if (isset($decoded['text']) && is_string($decoded['text'])) {
+                return [$decoded['text']];
+            }
+            // If it's a JSON array, return it
+            return $decoded;
+        }
+
+        // If it's plain text, return as single-item array
+        return [$data];
+    }
+
+    /**
+     * Add a new attribute
+     */
+    public function addAttribute()
+    {
+        if (!empty(trim($this->newAttribute))) {
+            $attribute = trim($this->newAttribute);
+            if (!in_array($attribute, $this->room_attributes)) {
+                $this->room_attributes[] = $attribute;
+            }
+            $this->newAttribute = '';
+        }
+    }
+
+    /**
+     * Remove an attribute by index
+     */
+    public function removeAttribute($index)
+    {
+        if (isset($this->room_attributes[$index])) {
+            unset($this->room_attributes[$index]);
+            $this->room_attributes = array_values($this->room_attributes); // Reindex array
+        }
+    }
+
+    /**
+     * Add a new amenity
+     */
+    public function addAmenity()
+    {
+        if (!empty(trim($this->newAmenity))) {
+            $amenity = trim($this->newAmenity);
+            if (!in_array($amenity, $this->room_amenities)) {
+                $this->room_amenities[] = $amenity;
+            }
+            $this->newAmenity = '';
+        }
+    }
+
+    /**
+     * Remove an amenity by index
+     */
+    public function removeAmenity($index)
+    {
+        if (isset($this->room_amenities[$index])) {
+            unset($this->room_amenities[$index]);
+            $this->room_amenities = array_values($this->room_amenities); // Reindex array
+        }
     }
 
 }

@@ -12,13 +12,13 @@
             
             {{-- Desktop Navigation --}}
             <nav class="hidden lg:flex space-x-8 ml-[10%]">
-                <a href="#" class="px-3 py-2 text-sm text-gray-700 hover:text-blue-600">The Hotel</a>
-                <a href="#" class="px-3 py-2 text-sm text-gray-700 hover:text-blue-600">Suites</a>
+                <a href="#" class="px-3 py-2 text-sm {{ Route::is('home') ? 'font-bold text-gray-900' : 'text-gray-700' }} hover:text-blue-600">The Hotel</a>
+                <a href="{{ route('room.home') }}" class="px-3 py-2 text-sm {{ Route::is('room.*') ? 'font-bold text-gray-900' : 'text-gray-700' }} hover:text-blue-600">Suites</a>
                 <a href="#" class="px-3 py-2 text-sm text-gray-700 hover:text-blue-600">Daycare</a>
                 <a href="#" class="px-3 py-2 text-sm text-gray-700 hover:text-blue-600">Spa & Fitness</a>
                 <a href="#" class="px-3 py-2 text-sm text-gray-700 hover:text-blue-600">Party & Events</a>
                 <a href="#" class="px-3 py-2 text-sm text-gray-700 hover:text-blue-600">Limo Services</a>
-                <a href="{{ route('shop.home') }}" class="px-3 py-2 text-sm text-gray-900 hover:text-blue-600">E‑Commerce</a>
+                <a href="{{ route('shop.home') }}" class="px-3 py-2 text-sm {{ Route::is('shop.*') ? 'font-bold text-gray-900' : 'text-gray-700' }} hover:text-blue-600">E‑Commerce</a>
             </nav>
             
              {{-- Mobile Menu Button --}}
@@ -215,13 +215,13 @@
          class="bg-white border-t border-gray-200 shadow-lg lg:hidden">
         <div class="py-4 pl-4 pr-4 mx-auto max-w-8xl sm:pl-6 sm:pr-6">
             <nav class="space-y-4">
-                <a href="#" class="block py-2 text-sm font-medium text-gray-700 hover:text-blue-600">The Hotel</a>
-                <a href="#" class="block py-2 text-sm font-medium text-gray-700 hover:text-blue-600">Suites</a>
+                <a href="#" class="block py-2 text-sm {{ Route::is('home') ? 'font-bold text-gray-900' : 'font-medium text-gray-700' }} hover:text-blue-600">The Hotel</a>
+                <a href="{{ route('room.home') }}" class="block py-2 text-sm {{ Route::is('room.*') ? 'font-bold text-gray-900' : 'font-medium text-gray-700' }} hover:text-blue-600">Suites</a>
                 <a href="#" class="block py-2 text-sm font-medium text-gray-700 hover:text-blue-600">Daycare</a>
                 <a href="#" class="block py-2 text-sm font-medium text-gray-700 hover:text-blue-600">Spa & Fitness</a>
                 <a href="#" class="block py-2 text-sm font-medium text-gray-700 hover:text-blue-600">Party & Events</a>
                 <a href="#" class="block py-2 text-sm font-medium text-gray-700 hover:text-blue-600">Limo Services</a>
-                <a href="{{ route('shop.home') }}" class="block py-2 text-sm font-medium text-gray-900 hover:text-blue-600">E‑Commerce</a>
+                <a href="{{ route('shop.home') }}" class="block py-2 text-sm {{ Route::is('shop.*') ? 'font-bold text-gray-900' : 'font-medium text-gray-700' }} hover:text-blue-600">E‑Commerce</a>
                 
                 {{-- Mobile Search --}}
                 <div class="pt-4 border-t border-gray-200">

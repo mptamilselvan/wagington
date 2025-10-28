@@ -5,6 +5,7 @@ namespace App\Livewire\Backend;
 use Livewire\Component;
 use App\Models\Species;
 use App\Models\SpeciesSizeModel;
+use App\Models\Size as SizeModel;
 use App\Models\RoomTypeModel;
 use App\Models\PetSizeLimitModel;
 use Illuminate\Support\Facades\Auth;
@@ -28,13 +29,9 @@ class PetSizeLimitSetting extends Component
     public $selectedSpeciesId = null;
     public $roomTypes = [];
     public $species = [];
-
-    // Size management
     public $sizes = [];
     public $sizeLimits = []; // Array to store limit values for each size ID
     public $petSizeLimits = []; // Current pet size limits for the room type
-
-    // Form properties
     public $editId = 0, $deleteId;
 
     /**
@@ -65,17 +62,11 @@ class PetSizeLimitSetting extends Component
     public function mount()
     {
         \session(['submenu' => 'pet-size-limit-setting']);
-        
+        $this->sizes = SizeModel::orderBy('name')->get();
         // Load all room types
         $this->roomTypes = RoomTypeModel::with('species')->orderBy('name')->get();
     }
 
-    /**
-     * Render the component view with dynamic data based on room type selection
-     * Loads species, sizes, and existing pet size limits for the selected room type
-     * Handles cascading data loading when room type changes
-     * @return \Illuminate\View\View
-     */
     public function render()
     {
         // Load species for selected room type
@@ -86,8 +77,7 @@ class PetSizeLimitSetting extends Component
                 $this->species = [$roomType->species];
                 
                 // Load all sizes for this species
-                $this->sizes = SpeciesSizeModel::where('species_id', $this->selectedSpeciesId)
-                    ->orderBy('size')
+                $this->sizes = SizeModel::orderBy('name')
                     ->get();
                 
                 // Load existing pet size limits for this room type

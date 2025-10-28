@@ -51,7 +51,22 @@ class RoomTypeRules
             ],
             'room_attributes'   => [
                 'required',
+                'array',
+                'min:1',
+            ],
+            'room_attributes.*'   => [
+                'required',
                 'string',
+                'max:255',
+            ],
+            'room_amenities'   => [
+                'nullable',
+                'array',
+            ],
+            'room_amenities.*'   => [
+                'required',
+                'string',
+                'max:255',
             ],
             'room_description'   => [
                 'required',
@@ -92,18 +107,87 @@ class RoomTypeRules
                 'nullable',
                 'file',
                 'mimes:pdf',
-                'max:10240',
+                // 25600 KB = 25 MB
+                'max:25600',
                 function ($attribute, $value, $fail) {
                     // Get the index from the attribute name
                     $index = explode('.', $attribute)[1];
                     
-                    // Check if content is provided
-                    $contentField = "aggreed_terms.{$index}.content";
-                    $content = request()->get($contentField);
+                    // Get all request data
+                    $allData = request()->all();
                     
-                    // Check if document_url already exists (for edit mode)
-                    $documentUrlField = "aggreed_terms.{$index}.document_url";
-                    $documentUrl = request()->get($documentUrlField);
+                    // Try to get content from Livewire components data
+                    $content = null;
+                    $documentUrl = null;
+                    
+                    // Handle components data - it might be a JSON string
+                    $componentsData = null;
+                    if (isset($allData['components'])) {
+                        if (is_string($allData['components'])) {
+                            $componentsData = json_decode($allData['components'], true);
+                        } else {
+                            $componentsData = $allData['components'];
+                        }
+                    }
+                    
+                    // Access Livewire component data structure
+                    if ($componentsData && isset($componentsData[0]['snapshot'])) {
+                        // The snapshot is also a JSON string, so decode it
+                        $snapshotData = null;
+                        if (is_string($componentsData[0]['snapshot'])) {
+                            $snapshotData = json_decode($componentsData[0]['snapshot'], true);
+                        } else {
+                            $snapshotData = $componentsData[0]['snapshot'];
+                        }
+                        
+                        // Helper to unwrap Livewire's serialized arrays: [value, {"s":"arr"}]
+                        $unwrapWireArray = function ($value) {
+                            if (is_array($value) && count($value) === 2 && isset($value[1]['s'])) {
+                                return $value[0];
+                            }
+                            return $value;
+                        };
+
+                        // Now access and unwrap the aggreed_terms data
+                        if ($snapshotData && isset($snapshotData['data']['aggreed_terms'])) {
+                            $aggreedTermsRaw = $snapshotData['data']['aggreed_terms'];
+                            $aggreedTerms = $unwrapWireArray($aggreedTermsRaw);
+
+                            if (is_array($aggreedTerms) && array_key_exists($index, $aggreedTerms)) {
+                                $termDataRaw = $aggreedTerms[$index];
+                                $termData = $unwrapWireArray($termDataRaw);
+
+                                if (is_array($termData)) {
+                                    $content = $termData['content'] ?? null;
+                                    $documentUrl = $termData['document_url'] ?? null;
+                                }
+                            }
+                        }
+                    }
+                    
+                    // Debug logging with comprehensive data structure analysis
+                    \Log::info('Document validation comprehensive', [
+                        'attribute' => $attribute,
+                        'index' => $index,
+                        'content' => $content,
+                        'content_length' => $content ? strlen($content) : 0,
+                        'document_url' => $documentUrl,
+                        'has_document' => $value ? 'yes' : 'no',
+                        'all_data_keys' => array_keys($allData),
+                        'components_exists' => isset($allData['components']),
+                        'components_is_string' => isset($allData['components']) ? is_string($allData['components']) : false,
+                        'components_count' => $componentsData ? count($componentsData) : 0,
+                        'first_component_keys' => $componentsData && isset($componentsData[0]) && is_array($componentsData[0]) ? array_keys($componentsData[0]) : 'not_set',
+                        'snapshot_exists' => $componentsData && isset($componentsData[0]['snapshot']),
+                        'snapshot_is_string' => $componentsData && isset($componentsData[0]['snapshot']) ? is_string($componentsData[0]['snapshot']) : false,
+                        'snapshot_data_exists' => isset($snapshotData),
+                        'data_exists' => $snapshotData && isset($snapshotData['data']),
+                        'data_keys' => $snapshotData && isset($snapshotData['data']) && is_array($snapshotData['data']) ? array_keys($snapshotData['data']) : 'not_set',
+                        'aggreed_terms_exists' => $snapshotData && isset($snapshotData['data']['aggreed_terms']),
+                        'aggreed_terms_keys' => $snapshotData && isset($snapshotData['data']['aggreed_terms']) && is_array($snapshotData['data']['aggreed_terms']) ? array_keys($snapshotData['data']['aggreed_terms']) : 'not_set',
+                        'term_data_raw' => isset($termDataRaw) ? $termDataRaw : 'not_set',
+                        'term_data_unwrapped' => isset($termData) ? $termData : 'not_set'
+                    ]);
                     
                     // If content is provided but no document is uploaded and no existing document_url
                     if ($content && !$value && !$documentUrl) {
@@ -150,8 +234,16 @@ class RoomTypeRules
             'species_id.required' => 'Species is required.',
             'species_id.integer' => 'Species must be an integer.',
             'species_id.exists' => 'Species must exist.',
-            'room_attributes.nullable' => 'Room attributes are nullable.',
-            'room_attributes.string' => 'Room attributes must be a string.',
+            'room_attributes.required' => 'At least one room attribute is required.',
+            'room_attributes.array' => 'Room attributes must be an array.',
+            'room_attributes.min' => 'At least one room attribute is required.',
+            'room_attributes.*.required' => 'Each room attribute is required.',
+            'room_attributes.*.string' => 'Each room attribute must be a string.',
+            'room_attributes.*.max' => 'Each room attribute must not exceed 255 characters.',
+            'room_amenities.array' => 'Room amenities must be an array.',
+            'room_amenities.*.required' => 'Each room amenity is required.',
+            'room_amenities.*.string' => 'Each room amenity must be a string.',
+            'room_amenities.*.max' => 'Each room amenity must not exceed 255 characters.',
             'room_description.nullable' => 'Room description is nullable.',
             'room_description.string' => 'Room description must be a string.',
             'room_overview.nullable' => 'Room overview is nullable.',
@@ -176,12 +268,12 @@ class RoomTypeRules
             'aggreed_terms.*.document.nullable' => 'Aggreed terms document is nullable.',
             'aggreed_terms.*.document.file' => 'Aggreed terms document must be a file.',
             'aggreed_terms.*.document.mimes' => 'Aggreed terms document must be a pdf.',
-            'aggreed_terms.*.document.max' => 'Aggreed terms document must be less than 10240.',
+            'aggreed_terms.*.document.max' => 'Aggreed terms document must be less than 25600 kilobytes (25MB).',
             'aggreed_terms.*.document.required_with' => 'Aggreed terms document is nullable when content is present.',
             'aggreed_terms.*.document.required' => 'Aggreed terms document is nullable.',
             'aggreed_terms.*.document.file' => 'Aggreed terms document must be a file.',
             'aggreed_terms.*.document.mimes' => 'Aggreed terms document must be a pdf.',
-            'aggreed_terms.*.document.max' => 'Aggreed terms document must be less than 10240.',
+            'aggreed_terms.*.document.max' => 'Aggreed terms document must be less than 25600 kilobytes (25MB).',
             'aggreed_terms.*.document.required_with' => 'Aggreed terms document is nullable when content is present.',
             'aggreed_terms.*.document.required' => 'Aggreed terms document is nullable.',
             'price_options.nullable' => 'Price options are optional.',

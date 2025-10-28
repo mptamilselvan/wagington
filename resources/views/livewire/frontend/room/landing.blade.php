@@ -37,7 +37,7 @@
     </x-slot>
 
     <!-- Standalone search just above the first section, aligned to the same container paddings -->
-    <div class="max-w-lg ml-auto mr-4 sm:mr-6 lg:mr-8 mt-10 sm:mt-14 mb-6 sm:mb-8">
+    <!--<div class="max-w-lg ml-auto  sm:mr-6 lg:mr-8 mt-10 sm:mt-14 mb-6 sm:mb-8">
         <div class="relative">
             <span class="pointer-events-none absolute inset-y-0 left-3 flex items-center text-gray-400">
                 <x-icons.search class="h-4 w-4" />
@@ -49,26 +49,33 @@
                 class="w-full rounded-xl border border-gray-200 bg-gray-50 focus:bg-white pl-9 pr-3 py-2.5 text-sm focus:outline-none focus:ring-2 focus:ring-blue-500 shadow-sm"
             />
         </div>
-    </div>
+    </div>-->
 
      <!-- Room row: horizontal scroll on small screens, grid on lg -->
             <div class="overflow-x-auto lg:overflow-visible" x-ref="r">
                               
-                <div class="flex gap-4 lg:grid lg:grid-cols-4 lg:gap-4 min-w-max lg:min-w-0" wire:key="room-types-{{ $selectedSpecies ?? 'all' }}-{{ $forceUpdate }}">
-                    @foreach($roomTypes as $roomType)
-                        
-                        @php($slug = $roomType->slug ?? '#')
-                        @php($url="/rooms/{$slug}")
-                        <div class="w-56 lg:w-auto flex-shrink-0">
-                            <x-room.room-card
-                                :url="$url"
-                                :image="$roomType->getPrimaryImageUrl()"
-                                :name="$roomType->name ?? ''"
-                                :price="$roomType->getFormattedPrice()"
-                                :description="$roomType->room_description ?? null"
-                            />
+                <div class="flex gap-4 lg:grid lg:grid-cols-4 lg:gap-4 min-w-max lg:min-w-0 items-stretch" wire:key="room-types-{{ $selectedSpecies ?? 'all' }}-{{ $forceUpdate }}">
+                    @if($roomTypes->isEmpty())
+                        <div class="col-span-4 w-full">
+                            <div class="flex items-center justify-center py-16 bg-white border border-dashed border-gray-300 rounded-xl text-gray-600">
+                                No rooms available for this species.
+                            </div>
                         </div>
-                    @endforeach
+                    @else
+                        @foreach($roomTypes as $roomType)
+                            @php($slug = $roomType->slug ?? '#')
+                            @php($url="/rooms/{$slug}")
+                            <div class="w-56 lg:w-auto flex-shrink-0 h-[420px]">
+                                <x-room.room-card
+                                    :url="$url"
+                                    :image="$roomType->getPrimaryImageUrl()"
+                                    :name="$roomType->name ?? ''"
+                                    :price="$roomType->getFormattedPrice()"
+                                    :description="$roomType->room_description ?? null"
+                                />
+                            </div>
+                        @endforeach
+                    @endif
                 </div>
             </div>
 </x-room.page-wrapper>

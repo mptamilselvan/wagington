@@ -94,4 +94,116 @@ class RoomService
         return $roomType;
     }
 
+    public function getRelatedRoomTypes(RoomTypeModel $currentRoom, int $limit = 5, int $offset = 0)
+    {
+        $relatedRooms = collect();
+        
+        // Get current room's attributes and amenities for matching
+        $currentAttributes = $currentRoom->room_attributes ?? [];
+        $currentAmenities = $currentRoom->room_amenities ?? [];
+        $currentPrice = $currentRoom->roomPriceOptions->first()?->price ?? 0;
+        $priceRange = $currentPrice * 0.3; // 30% price range tolerance
+        
+        // First priority: Same species with matching attributes/amenities
+        $sameSpeciesWithMatches = RoomTypeModel::with('species', 'rooms', 'roomPriceOptions')
+            ->where('species_id', $currentRoom->species_id)
+            ->where('id', '!=', $currentRoom->id)
+            ->whereHas('rooms')
+            ->get()
+            ->filter(function($room) use ($currentAttributes, $currentAmenities, $currentPrice, $priceRange) {
+                $roomPrice = $room->roomPriceOptions->first()?->price ?? 0;
+                $priceMatch = abs($roomPrice - $currentPrice) <= $priceRange;
+                
+                $attributesMatch = $this->calculateMatchScore($currentAttributes, $room->room_attributes ?? []);
+                $amenitiesMatch = $this->calculateMatchScore($currentAmenities, $room->room_amenities ?? []);
+                
+                return $priceMatch && ($attributesMatch > 0 || $amenitiesMatch > 0);
+            })
+            ->sortByDesc(function($room) use ($currentAttributes, $currentAmenities) {
+                $attributesMatch = $this->calculateMatchScore($currentAttributes, $room->room_attributes ?? []);
+                $amenitiesMatch = $this->calculateMatchScore($currentAmenities, $room->room_amenities ?? []);
+                return $attributesMatch + $amenitiesMatch;
+            });
+
+        $relatedRooms = $relatedRooms->merge($sameSpeciesWithMatches);
+
+        // Second priority: Same species with price match (if we need more)
+        if ($relatedRooms->count() < ($offset + $limit)) {
+            $sameSpeciesPriceMatch = RoomTypeModel::with('species', 'rooms', 'roomPriceOptions')
+                ->where('species_id', $currentRoom->species_id)
+                ->where('id', '!=', $currentRoom->id)
+                ->whereNotIn('id', $relatedRooms->pluck('id'))
+                ->whereHas('rooms')
+                ->get()
+                ->filter(function($room) use ($currentPrice, $priceRange) {
+                    $roomPrice = $room->roomPriceOptions->first()?->price ?? 0;
+                    return abs($roomPrice - $currentPrice) <= $priceRange;
+                });
+
+            $relatedRooms = $relatedRooms->merge($sameSpeciesPriceMatch);
+        }
+
+        // Third priority: Different species with matching attributes/amenities (if we still need more)
+        if ($relatedRooms->count() < ($offset + $limit)) {
+            $differentSpeciesWithMatches = RoomTypeModel::with('species', 'rooms', 'roomPriceOptions')
+                ->where('species_id', '!=', $currentRoom->species_id)
+                ->where('id', '!=', $currentRoom->id)
+                ->whereNotIn('id', $relatedRooms->pluck('id'))
+                ->whereHas('rooms')
+                ->get()
+                ->filter(function($room) use ($currentAttributes, $currentAmenities, $currentPrice, $priceRange) {
+                    $roomPrice = $room->roomPriceOptions->first()?->price ?? 0;
+                    $priceMatch = abs($roomPrice - $currentPrice) <= $priceRange;
+                    
+                    $attributesMatch = $this->calculateMatchScore($currentAttributes, $room->room_attributes ?? []);
+                    $amenitiesMatch = $this->calculateMatchScore($currentAmenities, $room->room_amenities ?? []);
+                    
+                    return $priceMatch && ($attributesMatch > 0 || $amenitiesMatch > 0);
+                })
+                ->sortByDesc(function($room) use ($currentAttributes, $currentAmenities) {
+                    $attributesMatch = $this->calculateMatchScore($currentAttributes, $room->room_attributes ?? []);
+                    $amenitiesMatch = $this->calculateMatchScore($currentAmenities, $room->room_amenities ?? []);
+                    return $attributesMatch + $amenitiesMatch;
+                });
+
+            $relatedRooms = $relatedRooms->merge($differentSpeciesWithMatches);
+        }
+
+        // Fourth priority: Any other room types (if we still need more)
+        if ($relatedRooms->count() < ($offset + $limit)) {
+            $otherRooms = RoomTypeModel::with('species', 'rooms', 'roomPriceOptions')
+                ->where('id', '!=', $currentRoom->id)
+                ->whereNotIn('id', $relatedRooms->pluck('id'))
+                ->whereHas('rooms')
+                ->get();
+            
+            $relatedRooms = $relatedRooms->merge($otherRooms);
+        }
+
+        // Apply pagination
+        return $relatedRooms->slice($offset, $limit)->values();
+    }
+
+    /**
+     * Calculate match score between two arrays of attributes/amenities
+     */
+    private function calculateMatchScore($array1, $array2)
+    {
+        if (empty($array1) || empty($array2)) {
+            return 0;
+        }
+
+        $matches = 0;
+        foreach ($array1 as $item1) {
+            foreach ($array2 as $item2) {
+                if (strtolower(trim($item1)) === strtolower(trim($item2))) {
+                    $matches++;
+                    break;
+                }
+            }
+        }
+
+        return $matches;
+    }
+
 }

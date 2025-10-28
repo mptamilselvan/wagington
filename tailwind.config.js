@@ -40,6 +40,17 @@ module.exports = {
                     red: "#F23D20",
                 },
 
+                // Background colors
+                bg: {
+                    primary: "#FFFFFF",
+                    secondary: "#F9FAFB",
+                    tertiary: "#F3F4F6",
+                    accent: "#FBF1E5",
+                    surface: "#F7F8FA",
+                    card: "#FFFFFF",
+                    overlay: "rgba(0, 0, 0, 0.5)",
+                },
+
                 // text color
                 gray: {
                     icons: "#8E8E8E",
@@ -59,6 +70,7 @@ module.exports = {
                     108: "#495057",
                     109: "#212529",
                     110: "#19191B",
+                    111: "#e0dfe0",
                 },
 
                 red: {

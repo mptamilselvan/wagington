@@ -77,22 +77,92 @@
             <!-- Room Attributes -->
             <div>
                 <label class="block mb-2 text-sm font-normal text-gray-700">Room Attributes*</label>
-                <textarea 
-                    wire:model="room_attributes"
-                    placeholder="Enter room attributes"
-                    class="w-full px-3 py-2 h-40 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent"
-                ></textarea>
+                <div class="space-y-3">
+                    <!-- Input for adding new attributes -->
+                    <div class="flex gap-2">
+                        <input 
+                            type="text" 
+                            wire:model="newAttribute"
+                            wire:keydown.enter.prevent="addAttribute"
+                            placeholder="Enter room attribute and press Enter"
+                            class="flex-1 px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent"
+                        >
+                        <button 
+                            type="button"
+                            wire:click="addAttribute"
+                            class="px-4 py-2 bg-blue-600 text-white rounded-lg hover:bg-blue-700 transition-colors"
+                        >
+                            Add
+                        </button>
+                    </div>
+                    
+                    <!-- Display existing attributes as tags -->
+                    @if(!empty($room_attributes) && is_array($room_attributes))
+                        <div class="flex flex-wrap gap-2">
+                            @foreach($room_attributes as $index => $attribute)
+                                <div class="inline-flex items-center gap-2 px-3 py-1.5 bg-blue-100 text-blue-800 rounded-lg border border-blue-200" wire:key="attribute-{{ $index }}">
+                                    <span class="text-sm font-medium">{{ $attribute }}</span>
+                                    <button 
+                                        type="button"
+                                        wire:click="removeAttribute({{ $index }})"
+                                        class="text-blue-600 hover:text-blue-800 focus:outline-none"
+                                        title="Remove attribute"
+                                    >
+                                        <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                                            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M6 18L18 6M6 6l12 12"></path>
+                                        </svg>
+                                    </button>
+                                </div>
+                            @endforeach
+                        </div>
+                    @endif
+                </div>
                 @error('room_attributes') <span class="text-sm text-red-500">{{ $message }}</span> @enderror
             </div>
 
             <!-- Room Amenities -->
             <div>
                 <label class="block mb-2 text-sm font-normal text-gray-700">Room Amenities</label>
-                <textarea 
-                    wire:model="room_amenities"
-                    placeholder="Enter room amenities"
-                    class="w-full px-3 py-2 h-40 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent"
-                ></textarea>
+                <div class="space-y-3">
+                    <!-- Input for adding new amenities -->
+                    <div class="flex gap-2">
+                        <input 
+                            type="text" 
+                            wire:model="newAmenity"
+                            wire:keydown.enter.prevent="addAmenity"
+                            placeholder="Enter room amenity and press Enter"
+                            class="flex-1 px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent"
+                        >
+                        <button 
+                            type="button"
+                            wire:click="addAmenity"
+                            class="px-4 py-2 bg-blue-600 text-white rounded-lg hover:bg-blue-700 transition-colors"
+                        >
+                            Add
+                        </button>
+                    </div>
+                    
+                    <!-- Display existing amenities as tags -->
+                    @if(!empty($room_amenities) && is_array($room_amenities))
+                        <div class="flex flex-wrap gap-2">
+                            @foreach($room_amenities as $index => $amenity)
+                                <div class="inline-flex items-center gap-2 px-3 py-1.5 bg-green-100 text-green-800 rounded-lg border border-green-200" wire:key="amenity-{{ $index }}">
+                                    <span class="text-sm font-medium">{{ $amenity }}</span>
+                                    <button 
+                                        type="button"
+                                        wire:click="removeAmenity({{ $index }})"
+                                        class="text-green-600 hover:text-green-800 focus:outline-none"
+                                        title="Remove amenity"
+                                    >
+                                        <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                                            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M6 18L18 6M6 6l12 12"></path>
+                                        </svg>
+                                    </button>
+                                </div>
+                            @endforeach
+                        </div>
+                    @endif
+                </div>
                 @error('room_amenities') <span class="text-sm text-red-500">{{ $message }}</span> @enderror
             </div>
     </div>
@@ -345,76 +415,79 @@
                 </div>
                 @endforeach
 
-     <div class="flex items-center justify-between px-2 py-4">
-                 <h3 class="text-lg font-medium text-gray-900">Price Options</h3>
-                 <button 
-                     type="button" 
-                     wire:click="addPriceOption"
-                     class="px-4 py-2 text-blue-600 hover:text-blue-800  rounded-lg hover:bg-blue-50 flex items-center gap-2"
-                 >
-                     <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                         <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 4v16m8-8H4"></path>
-                     </svg>
-                     Add more
-                 </button>
-             </div>
-            
-            @foreach($price_options as $index => $option)
-            <div class="grid grid-cols-4 gap-6 mb-6 md:grid-cols-4" wire:key="price-option-{{ $index }}">
-                <!-- Label -->
-                <div>
-                    <label class="block mb-2 text-sm font-normal text-gray-700">Label*</label>
-                    <input 
-                        type="text" 
-                        wire:model.live="price_options.{{ $index }}.label"
-                        placeholder="Enter label"
-                        class="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent"
-                    >
-                    @error('price_options.'.$index.'.label') <span class="text-sm text-red-500">{{ $message }}</span> @enderror
-                </div>
-
-                <!-- No. of days -->
-                <div>
-                    <label class="block mb-2 text-sm font-normal text-gray-700">No. of days*</label>
-                    <input 
-                        type="text" 
-                        wire:model.live="price_options.{{ $index }}.no_of_days"
-                        placeholder="Enter no. of days"
-                        class="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent"
-                    >
-                    @error('price_options.'.$index.'.no_of_days') <span class="text-sm text-red-500">{{ $message }}</span> @enderror
-                </div>
-
-                <!-- Price -->
-                <div>
-                    <label class="block mb-2 text-sm font-normal text-gray-700">Price (SGD)*</label>
-                    <input 
-                        type="text" 
-                        wire:model.live="price_options.{{ $index }}.price"
-                        placeholder="Enter price"
-                        class="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent"
-                    >
-                    @error('price_options.'.$index.'.price') <span class="text-sm text-red-500">{{ $message }}</span> @enderror
-                </div>
-
-                <!-- Remove button -->
-                <div>
-                    <label class="block mb-2 text-sm font-normal text-gray-700">&nbsp;</label>
-                    @if(isset($price_options) && is_array($price_options) && count($price_options) > 1)
-                        <button 
-                            type="button" 
-                            wire:click="removePriceOption({{ $index }})"
-                            class="px-3 py-2 text-red-600 hover:text-red-800 border border-red-300 rounded-lg hover:bg-red-50"
-                            title="Remove this price option"
-                        >
-                            <svg class="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                                <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M19 7l-.867 12.142A2 2 0 0116.138 21H7.862a2 2 0 01-1.995-1.858L5 7m5 4v6m4-6v6m1-10V4a1 1 0 00-1-1h-4a1 1 0 00-1 1v3M4 7h16"></path>
-                            </svg>
-                        </button>
-                    @endif
-                </div>
+     <!-- Price Options Section -->
+     <div class="bg-gray-50 border border-gray-200 rounded-lg shadow-sm p-6 mb-6">
+         <div class="flex items-center justify-between px-2 py-4 border-b border-gray-200 mb-6">
+             <h3 class="text-lg font-medium text-gray-900">Price Options</h3>
+             <button 
+                 type="button" 
+                 wire:click="addPriceOption"
+                 class="px-4 py-2 text-blue-600 hover:text-blue-800 border border-blue-300 rounded-lg hover:bg-blue-50 flex items-center gap-2 transition-colors"
+             >
+                 <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                     <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 4v16m8-8H4"></path>
+                 </svg>
+                 Add more
+             </button>
+         </div>
+        
+        @foreach($price_options as $index => $option)
+        <div class="grid grid-cols-4 gap-6 mb-6 md:grid-cols-4" wire:key="price-option-{{ $index }}">
+            <!-- Label -->
+            <div>
+                <label class="block mb-2 text-sm font-normal text-gray-700">Label*</label>
+                <input 
+                    type="text" 
+                    wire:model.live="price_options.{{ $index }}.label"
+                    placeholder="Enter label"
+                    class="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent"
+                >
+                @error('price_options.'.$index.'.label') <span class="text-sm text-red-500">{{ $message }}</span> @enderror
             </div>
-            @endforeach
+
+            <!-- No. of days -->
+            <div>
+                <label class="block mb-2 text-sm font-normal text-gray-700">No. of days*</label>
+                <input 
+                    type="text" 
+                    wire:model.live="price_options.{{ $index }}.no_of_days"
+                    placeholder="Enter no. of days"
+                    class="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent"
+                >
+                @error('price_options.'.$index.'.no_of_days') <span class="text-sm text-red-500">{{ $message }}</span> @enderror
+            </div>
+
+            <!-- Price -->
+            <div>
+                <label class="block mb-2 text-sm font-normal text-gray-700">Price (SGD)*</label>
+                <input 
+                    type="text" 
+                    wire:model.live="price_options.{{ $index }}.price"
+                    placeholder="Enter price"
+                    class="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent"
+                >
+                @error('price_options.'.$index.'.price') <span class="text-sm text-red-500">{{ $message }}</span> @enderror
+            </div>
+
+            <!-- Remove button -->
+            <div>
+                <label class="block mb-2 text-sm font-normal text-gray-700">&nbsp;</label>
+                @if(isset($price_options) && is_array($price_options) && count($price_options) > 1)
+                    <button 
+                        type="button" 
+                        wire:click="removePriceOption({{ $index }})"
+                        class="px-3 py-2 text-red-600 hover:text-red-800 border border-red-300 rounded-lg hover:bg-red-50 transition-colors"
+                        title="Remove this price option"
+                    >
+                        <svg class="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M19 7l-.867 12.142A2 2 0 0116.138 21H7.862a2 2 0 01-1.995-1.858L5 7m5 4v6m4-6v6m1-10V4a1 1 0 00-1-1h-4a1 1 0 00-1 1v3M4 7h16"></path>
+                        </svg>
+                    </button>
+                @endif
+            </div>
+        </div>
+        @endforeach
+     </div>
             
         <div class="grid grid-cols-1 gap-6 mb-6 md:grid-cols-2">
             

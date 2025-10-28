@@ -5,7 +5,7 @@
 <div>
 <div class="relative">
     <!-- Hero banner -->
-    <div class="h-40 sm:h-48 md:h-56 lg:h-64 bg-gray-200">
+    <div class="h-40 sm:h-48 md:h-56 lg:h-64 bg-gray-200" style="height: 390px;">
         <img src="{{ $heroImage }}" alt="Rooms banner" class="w-full h-full object-cover" />
     </div>
 
@@ -14,7 +14,7 @@
         <div class="w-full max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
             <!-- Limit width so it doesn't stretch full page -->
             <div class="max-w-7xl backdrop-blur-md rounded-2xl shadow-sm border border-gray-100 bg-gray-100">
-                <div class="px-6 sm:px-8 lg:px-10 py-5 sm:py-6 lg:py-7">
+                <div class="px-6 sm:px-8 lg:px-10 py-5 sm:py-6 lg:py-7" tyle="height: 272px;">
                     @isset($header)
                         {{ $header }}
                     @else
@@ -29,7 +29,7 @@
 </div>
 
 <!-- Main content placed with top padding to accommodate floating card -->
-<div class="w-full max-w-screen-2xl 2xl:max-w-[1660px] mx-auto px-4 sm:px-6 lg:px-8 pt-10 sm:pt-12 md:pt-16 bg-gradient-to-b from-blue-50 to-white min-h-screen">
+<div class="w-full max-w-screen-2xl 2xl:max-w-[1660px] mx-auto px-4 sm:px-6 lg:px-8 pt-10 sm:pt-12 md:pt-16 g-gradient-to-b bg-white rom-primary-blue to-white min-h-screen">
      {{ $slot }}
 
     <!-- Common ecommerce bottom sections -->

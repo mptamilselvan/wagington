@@ -15,13 +15,13 @@
 
 <x-room.page-wrapper heroImage="/images/hero-room.png">
     <x-slot name="header">
-        <div class="flex flex-col">
+        <div class="flex flex-col ">
             <h1 class="text-3xl sm:text-4xl font-bold text-gray-900">{{ $room->name }}</h1>
         </div>
     </x-slot>
 
     <!-- Standalone search just above the first section, aligned to the same container paddings -->
-    <div class="max-w-lg ml-auto mr-4 sm:mr-6 lg:mr-8 mt-10 sm:mt-14 mb-6 sm:mb-8">
+    <!--<div class="max-w-lg ml-auto mr-4 sm:mr-6 lg:mr-8 mt-10 sm:mt-14 mb-6 sm:mb-8">
         <div class="relative">
             <span class="pointer-events-none absolute inset-y-0 left-3 flex items-center text-gray-400">
                 <x-icons.search class="h-4 w-4" />
@@ -33,31 +33,32 @@
                 class="w-full rounded-xl border border-gray-200 bg-gray-50 focus:bg-white pl-9 pr-3 py-2.5 text-sm focus:outline-none focus:ring-2 focus:ring-blue-500 shadow-sm"
             />
         </div>
-    </div>
+    </div>-->
 
     <!-- Room Details Content -->
+    <div class="ml-[20px] mr-[20px]">
     <div class="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8" x-data="{ activeTab: 'overview' }">
         <!-- Tabs Navigation -->
-        <div class="border-b border-gray-200 mb-8">
-            <nav class="-mb-px flex space-x-8">
+        <div class="border-b border-gray-200 mb-8" style="padding-left: 30px; padding-right: 30px;">
+            <nav class="-mb-px flex space-x-8" >
                 <button 
                     @click="activeTab = 'overview'"
                     :class="activeTab === 'overview' ? 'border-blue-500 text-blue-600' : 'border-transparent text-gray-500 hover:text-gray-700 hover:border-gray-300'"
-                    class="whitespace-nowrap py-2 px-1 border-b-2 font-medium text-sm"
+                    class="whitespace-nowrap py-2 px-1 border-b-2 font-medium text-lg"
                 >
                     Overview
                 </button>
                 <button 
                     @click="activeTab = 'highlights'"
                     :class="activeTab === 'highlights' ? 'border-blue-500 text-blue-600' : 'border-transparent text-gray-500 hover:text-gray-700 hover:border-gray-300'"
-                    class="whitespace-nowrap py-2 px-1 border-b-2 font-medium text-sm"
+                    class="whitespace-nowrap py-2 px-1 border-b-2 font-medium text-lg"
                 >
                     Highlights
                 </button>
                 <button 
                     @click="activeTab = 'terms'"
                     :class="activeTab === 'terms' ? 'border-blue-500 text-blue-600' : 'border-transparent text-gray-500 hover:text-gray-700 hover:border-gray-300'"
-                    class="whitespace-nowrap py-2 px-1 border-b-2 font-medium text-sm"
+                    class="whitespace-nowrap py-2 px-1 border-b-2 font-medium text-lg"
                 >
                     Terms & Conditions
                 </button>
@@ -65,14 +66,14 @@
         </div>
 
         <!-- Tab Content -->
-        <div class="grid grid-cols-1 lg:grid-cols-2 gap-8">
+        <div class="grid grid-cols-1 lg:grid-cols-2 gap-8" style="padding-left: 30px; padding-right: 30px;">
             <!-- Left Column - Text Content -->
             <div class="space-y-6">
                 <!-- Overview Tab -->
                 <div x-show="activeTab === 'overview'" x-transition>
                     <div class="prose max-w-none">
-                        <h3 class="text-lg font-semibold text-gray-900 mb-4">Room Description</h3>
-                        <div class="text-gray-700 leading-relaxed">
+                        <h3 class="text-lg font-semibold text-gray-900 mb-4 ">Room Description</h3>
+                        <div class="text-gray-700 leading-relaxed text-lg">
                             {!! nl2br(e($room->room_description)) !!}
                         </div>
                     </div>
@@ -82,7 +83,7 @@
                 <div x-show="activeTab === 'highlights'" x-transition>
                     <div class="prose max-w-none">
                         <h3 class="text-lg font-semibold text-gray-900 mb-4">Room Highlights</h3>
-                        <div class="text-gray-700 leading-relaxed">
+                        <div class="text-gray-700 leading-relaxed text-lg">
                             {!! nl2br(e($room->room_highlights)) !!}
                         </div>
                     </div>
@@ -92,7 +93,7 @@
                 <div x-show="activeTab === 'terms'" x-transition>
                     <div class="prose max-w-none">
                         <h3 class="text-lg font-semibold text-gray-900 mb-4">Terms & Conditions</h3>
-                        <div class="text-gray-700 leading-relaxed">
+                        <div class="text-gray-700 leading-relaxed text-lg">
                             {!! nl2br(e($room->room_terms_and_conditions)) !!}
                         </div>
                     </div>
@@ -100,7 +101,7 @@
             </div>
 
             <!-- Right Column - Images -->
-            <div class="space-y-4">
+            <div class="space-y-4" style="padding-left: 10px; padding-right: 30px;">
                 @if($room->images && is_array($room->images) && count($room->images) > 0)
                     @php
                         $primaryImage = null;
@@ -127,7 +128,7 @@
                         @if(count($otherImages) > 0)
                             @php
                                 $totalOtherImages = count($otherImages);
-                                $primaryImageHeight = 320; // h-80 = 320px
+                                $primaryImageHeight = 350; // h-80 = 320px
                                 $gapBetweenImages = 22; // space-y-2 = 8px
                                 $totalGapHeight = ($totalOtherImages - 1) * $gapBetweenImages;
                                 $availableHeight = $primaryImageHeight - $totalGapHeight;
@@ -135,7 +136,7 @@
                             @endphp
                             <div class="md:col-span-1 space-y-2">
                                 @foreach($otherImages as $index => $image)
-                                    <div style="height: {{ $individualImageHeight }}px;">
+                                    <div style="height: {{ $individualImageHeight }}px; border-radius: 20px; overflow: hidden;" class="  cursor-pointer">
                                         <img 
                                             src="{{ $image['url'] ?? $image }}" 
                                             alt="{{ $room->name }} - Image {{ $index + 1 }}"
@@ -156,7 +157,7 @@
 
                         <!-- Primary Image (Right Column) -->
                         @if($primaryImage)
-                            <div class="md:col-span-2">
+                            <div class="md:col-span-2" style="border-radius: 20px; overflow: hidden;">
                                 <img 
                                     src="{{ $primaryImage['url'] ?? $primaryImage }}" 
                                     alt="{{ $room->name }} - Primary Image"
@@ -179,4 +180,76 @@
             </div>
         </div>
     </div>
+                    </div>
+
+    <!-- You might also like section -->
+    @if($relatedRooms && count($relatedRooms) > 0)
+        <div class="mt-16 mb-8" x-data>
+            <div class="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
+                <div class="flex items-center justify-between mb-6">
+                    <h2 class="text-3xl font-bold text-gray-900">You might also like</h2>
+                    <div class="flex items-center gap-2">
+                        <button type="button"
+                                class="inline-flex items-center justify-center w-9 h-9 rounded-full border border-gray-300 text-gray-600 hover:text-gray-900 hover:border-gray-400 bg-white shadow-sm"
+                                wire:click="loadPreviousRelated"
+                                @if($relatedOffset <= 0) disabled class="opacity-50 cursor-not-allowed" @endif
+                                aria-label="Previous">
+                            ‹
+                        </button>
+                        <button type="button"
+                                class="inline-flex items-center justify-center w-9 h-9 rounded-full border border-gray-300 text-gray-600 hover:text-gray-900 hover:border-gray-400 bg-white shadow-sm"
+                                wire:click="loadNextRelated"
+                                @if(!$hasMoreRelated) disabled class="opacity-50 cursor-not-allowed" @endif
+                                aria-label="Next">
+                            ›
+                        </button>
+                    </div>
+                </div>
+
+                <div class="overflow-x-auto no-scrollbar">
+                    <div x-ref="relatedRail" class="flex gap-6 overflow-x-auto no-scrollbar scroll-smooth pb-2">
+                        @foreach($relatedRooms as $relatedRoom)
+                            @php($relatedSlug = $relatedRoom->slug ?? '#')
+                            @php($relatedUrl = "/rooms/{$relatedSlug}")
+                            <div class="w-64 flex-shrink-0">
+                                <div class="group bg-white border rounded-[20px] overflow-hidden hover:shadow-lg transition-all duration-300 hover:border-blue-500 h-96">
+                                    <!-- Room image -->
+                                    <a href="{{ $relatedUrl }}" class="relative bg-gray-50 overflow-hidden flex items-center justify-center h-56 w-full">
+                                        @if($relatedRoom->getPrimaryImageUrl())
+                                            <img src="{{ $relatedRoom->getPrimaryImageUrl() }}" alt="{{ $relatedRoom->name }}" class="object-cover w-full h-full" />
+                                            <!-- Price overlay -->
+                                            @if($relatedRoom->getFormattedPrice())
+                                                <div class="absolute bottom-6 left-3 bg-white bg-opacity-95 rounded-[20px] px-6 py-4 text-center shadow-sm">
+                                                    <div class="text-sm font-semibold text-blue-600">From {{ $relatedRoom->getFormattedPrice() }}</div>
+                                                </div>
+                                            @endif
+                                        @else
+                                            <span class="text-gray-400 text-sm">No image</span>
+                                        @endif  
+                                    </a>
+
+                                    <!-- Room info -->
+                                    <div class="flex flex-col justify-between h-[180px] p-5">
+                                        <div class="flex-1">
+                                            <div class="text-sm font-medium text-gray-900 line-clamp-2">{{ $relatedRoom->name }}</div>
+                                            @if($relatedRoom->room_description)
+                                                <div class="mt-2 text-xs text-gray-600 line-clamp-3">{{ \Illuminate\Support\Str::limit($relatedRoom->room_description, 150) }}</div>
+                                            @endif
+                                        </div>
+
+                                        <!-- Actions -->
+                                        <div class="mt-4">
+                                            <a href="{{ $relatedUrl }}" class="inline-flex items-center text-blue-600 text-sm font-medium hover:text-blue-700">
+                                                More info →
+                                            </a>
+                                        </div>
+                                    </div>
+                                </div>
+                            </div>
+                        @endforeach
+                    </div>
+                </div>
+            </div>
+        </div>
+    @endif
 </x-room.page-wrapper>
