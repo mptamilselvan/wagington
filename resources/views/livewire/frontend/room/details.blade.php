@@ -15,8 +15,13 @@
 
 <x-room.page-wrapper heroImage="/images/hero-room.png">
     <x-slot name="header">
-        <div class="flex flex-col ">
+        <div class="flex flex-col sm:flex-row sm:items-center sm:justify-between">
             <h1 class="text-3xl sm:text-4xl font-bold text-gray-900">{{ $room->name }}</h1>
+            <div class="mt-4 sm:mt-0">
+                <button wire:click="openBooking" class="bg-blue-600 hover:bg-blue-700 text-white font-semibold py-3 px-8 rounded-full shadow-lg transition-all duration-200 transform hover:scale-105 focus:outline-none focus:ring-2 focus:ring-blue-500 focus:ring-offset-2">
+                    Book Now
+                </button>
+            </div>
         </div>
     </x-slot>
 
@@ -72,8 +77,8 @@
                 <!-- Overview Tab -->
                 <div x-show="activeTab === 'overview'" x-transition>
                     <div class="prose max-w-none">
-                        <h3 class="text-lg font-semibold text-gray-900 mb-4 ">Room Description</h3>
-                        <div class="text-gray-700 leading-relaxed text-lg">
+                        <!--<h3 class="text-lg font-semibold text-gray-900 mb-4 ">Room Description</h3>-->
+                        <div class="text-gray-700 leading-10 text-lg">
                             {!! nl2br(e($room->room_description)) !!}
                         </div>
                     </div>
@@ -82,8 +87,8 @@
                 <!-- Highlights Tab -->
                 <div x-show="activeTab === 'highlights'" x-transition>
                     <div class="prose max-w-none">
-                        <h3 class="text-lg font-semibold text-gray-900 mb-4">Room Highlights</h3>
-                        <div class="text-gray-700 leading-relaxed text-lg">
+                        <!--<h3 class="text-lg font-semibold text-gray-900 mb-4">Room Highlights</h3>-->
+                        <div class="text-gray-700 leading-10 text-lg">
                             {!! nl2br(e($room->room_highlights)) !!}
                         </div>
                     </div>
@@ -92,8 +97,8 @@
                 <!-- Terms & Conditions Tab -->
                 <div x-show="activeTab === 'terms'" x-transition>
                     <div class="prose max-w-none">
-                        <h3 class="text-lg font-semibold text-gray-900 mb-4">Terms & Conditions</h3>
-                        <div class="text-gray-700 leading-relaxed text-lg">
+                        <!--<h3 class="text-lg font-semibold text-gray-900 mb-4">Terms & Conditions</h3>-->
+                        <div class="text-gray-700 leading-10 text-lg">
                             {!! nl2br(e($room->room_terms_and_conditions)) !!}
                         </div>
                     </div>
@@ -238,7 +243,7 @@
                                         </div>
 
                                         <!-- Actions -->
-                                        <div class="mt-4">
+                                        <div class="mt-4 mb-4">
                                             <a href="{{ $relatedUrl }}" class="inline-flex items-center text-blue-600 text-sm font-medium hover:text-blue-700">
                                                 More info →
                                             </a>

@@ -11,6 +11,8 @@ use App\Models\Species;
 use App\Models\Product;
 use App\Models\RoomTypeModel;
 use App\Models\RoomPriceOptionModel;
+use App\Services\ImageService;
+use Illuminate\Support\Facades\Storage;
 use Illuminate\Support\Str;
 
 class RoomType extends Component
@@ -645,7 +647,15 @@ class RoomType extends Component
     public function removeDocument($termIndex)
     {
         if (isset($this->aggreed_terms[$termIndex])) {
+            // Clear any newly uploaded temporary document
             $this->aggreed_terms[$termIndex]['document'] = null;
+
+            // Also clear existing persisted document URL so the preview disappears immediately
+            if (isset($this->aggreed_terms[$termIndex]['document_url'])) {
+                unset($this->aggreed_terms[$termIndex]['document_url']);
+            }
+
+            // Remove any live preview entry
             unset($this->documentPreviews[$termIndex]);
         }
     }
@@ -738,9 +748,14 @@ class RoomType extends Component
             $imageUrls = [];
             if ($this->images) {
                 foreach ($this->images as $index => $image) {
-                    $path = $image->store('room_types/images', 'public');
+
+                    if (!empty($image) && Storage::disk('do_spaces')->exists($image->getClientOriginalName())) {
+                        Storage::disk('do_spaces')->delete($image->getClientOriginalName());
+                    }
+                    // Upload new one
+                    $path = $image->getClientOriginalName()->store('room_types', 'do_spaces');
                     $imageUrls[] = [
-                        'url' => asset('storage/' . $path),
+                        'url' => ImageService::getPublicUrl($path),
                         'primary' => isset($this->imagePrimary[$index]) ? (bool)$this->imagePrimary[$index] : false
                     ];
                 }
@@ -754,8 +769,12 @@ class RoomType extends Component
                 ];
                 
                 if (isset($term['document']) && $term['document']) {
-                    $path = $term['document']->store('room_types/documents', 'public');
-                    $processedTerm['document_url'] = asset('storage/' . $path);
+                    if (!empty($term['document']) && Storage::disk('do_spaces')->exists($term['document'])) {
+                       // Storage::disk('do_spaces')->delete($term['document']);
+                    }
+                    // Upload new one
+                    $path = $term['document']->store('room_types/documents', 'do_spaces');
+                    $processedTerm['document_url'] = ImageService::getPublicUrl($path);
                 }
                 
                 $processedAgreedTerms[] = $processedTerm;
@@ -880,9 +899,14 @@ class RoomType extends Component
             // Add new images with primary flags
             if ($this->images) {
                 foreach ($this->images as $index => $image) {
-                    $path = $image->store('room_types/images', 'public');
+                   // $path = $image->store('room_types/images', 'public');
+                   if (!empty($image) && Storage::disk('do_spaces')->exists($image)) {
+                        Storage::disk('do_spaces')->delete($image);
+                    }
+                    // Upload new one
+                    $path = $image->store('room_types', 'do_spaces');
                     $imageUrls[] = [
-                        'url' => asset('storage/' . $path),
+                        'url' => ImageService::getPublicUrl($path),
                         'primary' => isset($this->newImagePrimary[$index]) ? (bool)$this->newImagePrimary[$index] : false
                     ];
                 }
@@ -896,8 +920,12 @@ class RoomType extends Component
                 ];
                 
                 if (isset($term['document']) && $term['document']) {
-                    $path = $term['document']->store('room_types/documents', 'public');
-                    $processedTerm['document_url'] = asset('storage/' . $path);
+                    if (!empty($term['document']) && Storage::disk('do_spaces')->exists($term['document'])) {
+                        Storage::disk('do_spaces')->delete($term['document']);
+                    }
+                    // Upload new one
+                    $path = $term['document']->store('room_types/documents', 'do_spaces');
+                    $processedTerm['document_url'] = ImageService::getPublicUrl($path);
                 } elseif (isset($term['document_url'])) {
                     // Keep existing document URL
                     $processedTerm['document_url'] = $term['document_url'];

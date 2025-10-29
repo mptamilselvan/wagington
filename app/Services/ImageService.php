@@ -444,4 +444,11 @@ class ImageService
             return false;
         }
     }
+    public static function getPublicUrl(?string $imagePath): ?string
+    {
+        if (empty($imagePath)) {
+            return null;
+        }
+        return Storage::disk(self::DISK_DIGITALOCEAN)->url($imagePath);
+    }
 }

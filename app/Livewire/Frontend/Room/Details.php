@@ -37,6 +37,11 @@ class Details extends Component
         $this->loadRelatedRooms();
     }
 
+    public function openBooking()
+    {
+        $this->dispatch('open-booking', roomId: $this->room->id);
+    }
+
     public function loadNextRelated()
     {
         $this->ensureService();

@@ -1,5 +1,5 @@
 <div class="rounded-2xl bg-gray-111 border shadow-sm overflow-hidden">
-    <div class="flex flex-col sm:flex-row items-stretch p-[20px] mx-14 my-14">
+    <div class="flex flex-col sm:flex-row items-stretch p-[10px] mx-14 my-14 h-[320px]">
         <div class="flex-1 p-5 sm:p-7">
             <h3 class="text-2xl sm:text-3xl font-semibold line-height-1.5">Get in touch with us!</h3><br/>
             <p class="text-lg text-gray-600 mt-1 line-height-1.5">For more information about pet transport services, contact us</p><br/>
@@ -8,7 +8,7 @@
             </div>
         </div>
         <div class="relative w-full sm:w-72 md:w-80 lg:w-96 h-40 sm:h-auto">
-            <img src="/images/cta-dog.png" alt="Contact" class="absolute inset-0 w-full h-full object-cover" />
+            <img src="/images/cta-dog.png" alt="Contact" class="bsolute inset-0 bject-cover" />
         </div>
     </div>
 </div>
