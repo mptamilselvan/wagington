@@ -235,7 +235,7 @@
                                 $settingsMenus = ['species', 'breeds', 'vaccination', 'blood-tests', 'sizes', 'pet-tags', 'vaccine-exemptions','revaluation-workflow'];
                                 $generalsettingsMenus = ['system-settings','company-settings','operational-hours','tax-settings'];
                                 $servicesettingsMenus = ['service-settings'];
-                                $roomsettingsMenus = ['species-size-settings','pet-size-limit-settings','cancel-setting'];
+                                $roomsettingsMenus = ['species-size-settings','pet-size-limit-settings','room-peak-seasons','room-off-days','cancel-setting'];
                                 $ecommercesettingsMenus = ['ecommerce-settings'];
                                   if( in_array(request()->segment(2), $settingsMenus )) {                                       
                                         $showSubmenu = '';

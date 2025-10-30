@@ -98,6 +98,20 @@ class CouponService
             $discountType = $voucherData['discount_type'] ?? 'fixed';
             $discountValue = $voucherData['discount_value'] ?? 0;
 
+            // Ensure we have a valid voucher id — if missing, treat as invalid response
+            if (empty($voucherId)) {
+                Log::warning('CouponService: validateVoucherViaAPI returned no voucher_id', [
+                    'coupon_code' => $couponCode,
+                    'response' => $result,
+                ]);
+
+                return [
+                    'valid' => false,
+                    'discount' => 0,
+                    'message' => $result['message'] ?? 'Invalid coupon data received from promotion service'
+                ];
+            }
+
             // Calculate discount
             $discount = $this->calculateDiscount($discountType, $discountValue, $subtotal);
 
@@ -133,21 +147,7 @@ class CouponService
             // Ensure percentage is within valid range
             $value = max(0, min(100, $value));
             $discount = ($subtotal * $value) / 100;
-        } else {
-            // For fixed amount discounts, cap at the subtotal to avoid negative totals
-            $discount = min($value, $subtotal);
-        }
-
-        // Ensure we never return a negative discount and round to 2 decimals
-        $discount = max(0, $discount);
-
-        return round($discount, 2);
-    }
-
-    /**
-     * Increment voucher usage via API
-     */
-    public function incrementVoucherUsage(int $voucherId): bool
+    public function incrementVoucherUsage(int $voucherId, string $orderId): bool
     {
         try {
             $token = $this->getAuthToken();
@@ -161,7 +161,9 @@ class CouponService
 
             $response = Http::withToken($token)
                 ->timeout($timeout)
-                ->post("{$baseUrl}/api/promotion/voucher/{$voucherId}/increment-usage");
+                ->post("{$baseUrl}/api/promotion/voucher/{$voucherId}/increment-usage", [
+                    'idempotency_key' => $orderId // Use order ID as idempotency key
+                ]);
 
             if ($response->failed()) {
                 Log::error('CouponService: Failed to increment voucher usage via API', [
@@ -178,6 +180,20 @@ class CouponService
                 Log::error('CouponService: Failed to increment voucher usage', [
                     'voucher_id' => $voucherId,
                     'message' => $result['message'] ?? 'Unknown error'
+                ]);
+                return false;
+            }
+
+            return true;
+
+        } catch (\Exception $e) {
+            Log::error('CouponService: Exception while incrementing voucher usage', [
+                'error' => $e->getMessage(),
+                'voucher_id' => $voucherId
+            ]);
+            return false;
+        }
+    }
                 ]);
                 return false;
             }

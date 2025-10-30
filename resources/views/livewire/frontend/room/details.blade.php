@@ -1,8 +1,8 @@
 @section('meta_tags')
     @php
-        $metaTitle = $room->name . ' - ' . config('app.name');
-        $metaDescription = $room->room_description;
-        $canonicalUrl = route('room.details', ['slug' => $room->slug]);
+        $metaTitle = $roomType->name . ' - ' . config('app.name');
+        $metaDescription = $roomType->room_description;
+        $canonicalUrl = route('room.details', ['slug' => $roomType->slug]);
     @endphp
     
     <x-seo.meta-tags 
@@ -16,8 +16,18 @@
 <x-room.page-wrapper heroImage="/images/hero-room.png">
     <x-slot name="header">
         <div class="flex flex-col sm:flex-row sm:items-center sm:justify-between">
-            <h1 class="text-3xl sm:text-4xl font-bold text-gray-900">{{ $room->name }}</h1>
-            <div class="mt-4 sm:mt-0">
+            <h1 class="text-3xl sm:text-4xl font-bold text-gray-900">{{ $roomType->name }}</h1>
+            <div class="mt-4 sm:mt-0 flex items-center gap-4">
+                @if(!empty($priceOptions))
+                <div class="flex items-center gap-3">
+                    <select wire:model.live="selectedPriceOptionId" class="appearance-none bg-white border border-gray-200 rounded-2xl px-4 py-2.5 shadow-sm text-gray-800 focus:outline-none focus:ring-2 focus:ring-blue-500">
+                        @foreach($priceOptions as $opt)
+                            <option value="{{ $opt['value'] }}">{{ $opt['option'] }}</option>
+                        @endforeach
+                    </select>
+                    <div class="text-2xl sm:text-3xl font-extrabold text-gray-900"><span class="text-base font-semibold tracking-wide mr-2">SGD</span>${{ number_format((float)($selectedPrice ?? 0), 0) }}<span class="text-xl font-bold text-gray-700">/day</span></div>
+                </div>
+                @endif
                 <button wire:click="openBooking" class="bg-blue-600 hover:bg-blue-700 text-white font-semibold py-3 px-8 rounded-full shadow-lg transition-all duration-200 transform hover:scale-105 focus:outline-none focus:ring-2 focus:ring-blue-500 focus:ring-offset-2">
                     Book Now
                 </button>
@@ -42,6 +52,10 @@
 
     <!-- Room Details Content -->
     <div class="ml-[20px] mr-[20px]">
+    @php
+        $hasHighlights = !empty(trim($roomType->room_highlights ?? ''));
+        $hasTerms = !empty(trim($roomType->room_terms_and_conditions ?? ''));
+    @endphp
     <div class="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8" x-data="{ activeTab: 'overview' }">
         <!-- Tabs Navigation -->
         <div class="border-b border-gray-200 mb-8" style="padding-left: 30px; padding-right: 30px;">
@@ -53,6 +67,7 @@
                 >
                     Overview
                 </button>
+                @if($hasHighlights)
                 <button 
                     @click="activeTab = 'highlights'"
                     :class="activeTab === 'highlights' ? 'border-blue-500 text-blue-600' : 'border-transparent text-gray-500 hover:text-gray-700 hover:border-gray-300'"
@@ -60,6 +75,8 @@
                 >
                     Highlights
                 </button>
+                @endif
+                @if($hasTerms)
                 <button 
                     @click="activeTab = 'terms'"
                     :class="activeTab === 'terms' ? 'border-blue-500 text-blue-600' : 'border-transparent text-gray-500 hover:text-gray-700 hover:border-gray-300'"
@@ -67,6 +84,7 @@
                 >
                     Terms & Conditions
                 </button>
+                @endif
             </nav>
         </div>
 
@@ -79,41 +97,70 @@
                     <div class="prose max-w-none">
                         <!--<h3 class="text-lg font-semibold text-gray-900 mb-4 ">Room Description</h3>-->
                         <div class="text-gray-700 leading-10 text-lg">
-                            {!! nl2br(e($room->room_description)) !!}
+                            {!! nl2br(e($roomType->room_description)) !!}
                         </div>
+                        @if(!empty($roomType->room_attributes) && is_array($roomType->room_attributes) && count($roomType->room_attributes) > 0)
+                        <div class="mt-8">
+                            <h4 class="text-xl font-semibold text-gray-900 mb-4">Room Attributes</h4>
+                            <div class="flex flex-wrap gap-2">
+                                @foreach($roomType->room_attributes as $attribute)
+                                    @if(!empty($attribute))
+                                    <span class="inline-flex items-center px-3 py-1.5 bg-blue-100 text-blue-800 rounded-lg border border-blue-200 text-sm font-medium">{{ $attribute }}</span>
+                                    @endif
+                                @endforeach
+                            </div>
+                        </div>
+                        @endif
+
+                        @if(!empty($roomType->room_amenities) && is_array($roomType->room_amenities) && count($roomType->room_amenities) > 0)
+                        <div class="mt-6">
+                            <h4 class="text-xl font-semibold text-gray-900 mb-4">Room Amenities</h4>
+                            <div class="flex flex-wrap gap-2">
+                                @foreach($roomType->room_amenities as $amenity)
+                                    @if(!empty($amenity))
+                                    <span class="inline-flex items-center px-3 py-1.5 bg-green-100 text-green-800 rounded-lg border border-green-200 text-sm font-medium">{{ $amenity }}</span>
+                                    @endif
+                                @endforeach
+                            </div>
+                        </div>
+                        @endif
                     </div>
                 </div>
 
                 <!-- Highlights Tab -->
+                @if($hasHighlights)
                 <div x-show="activeTab === 'highlights'" x-transition>
                     <div class="prose max-w-none">
                         <!--<h3 class="text-lg font-semibold text-gray-900 mb-4">Room Highlights</h3>-->
                         <div class="text-gray-700 leading-10 text-lg">
-                            {!! nl2br(e($room->room_highlights)) !!}
+                            {!! nl2br(e($roomType->room_highlights)) !!}
                         </div>
                     </div>
                 </div>
+                @endif
 
                 <!-- Terms & Conditions Tab -->
+                @if($hasTerms)
                 <div x-show="activeTab === 'terms'" x-transition>
                     <div class="prose max-w-none">
                         <!--<h3 class="text-lg font-semibold text-gray-900 mb-4">Terms & Conditions</h3>-->
                         <div class="text-gray-700 leading-10 text-lg">
-                            {!! nl2br(e($room->room_terms_and_conditions)) !!}
+                            {!! nl2br(e($roomType->room_terms_and_conditions)) !!}
                         </div>
                     </div>
                 </div>
+                @endif
             </div>
 
             <!-- Right Column - Images -->
             <div class="space-y-4" style="padding-left: 10px; padding-right: 30px;">
-                @if($room->images && is_array($room->images) && count($room->images) > 0)
+                @if($roomType->images && is_array($roomType->images) && count($roomType->images) > 0)
                     @php
                         $primaryImage = null;
                         $otherImages = [];
                         
                         // Find primary image and separate others
-                        foreach($room->images as $image) {
+                        foreach($roomType->images as $image) {
                             if(is_array($image) && isset($image['primary']) && $image['primary'] === true) {
                                 $primaryImage = $image;
                             } else {
@@ -144,14 +191,14 @@
                                     <div style="height: {{ $individualImageHeight }}px; border-radius: 20px; overflow: hidden;" class="  cursor-pointer">
                                         <img 
                                             src="{{ $image['url'] ?? $image }}" 
-                                            alt="{{ $room->name }} - Image {{ $index + 1 }}"
+                                            alt="{{ $roomType->name }} - Image {{ $index + 1 }}"
                                             class="w-full h-full object-cover rounded-lg shadow-md hover:shadow-lg transition-shadow cursor-pointer"
                                             @click="
                                                 // Simple image modal functionality
                                                 $dispatch('open-modal', {
                                                     type: 'image',
                                                     src: '{{ $image['url'] ?? $image }}',
-                                                    alt: '{{ $room->name }} - Image {{ $index + 1 }}'
+                                                    alt: '{{ $roomType->name }} - Image {{ $index + 1 }}'
                                                 })
                                             "
                                         >
@@ -165,7 +212,7 @@
                             <div class="md:col-span-2" style="border-radius: 20px; overflow: hidden;">
                                 <img 
                                     src="{{ $primaryImage['url'] ?? $primaryImage }}" 
-                                    alt="{{ $room->name }} - Primary Image"
+                                    alt="{{ $roomType->name }} - Primary Image"
                                     class="w-full h-80 object-cover rounded-lg shadow-lg"
                                 >
                             </div>

@@ -49,40 +49,6 @@ class MiniCart extends Component
     }
 
 
-    public function increment(string $id)
-    {
-        $items = $this->cart['items'] ?? [];
-        if (!is_array($items) || $items === []) {
-            return;
-        }
-
-        $idx = collect($items)->search(fn($it) => ($it['id'] ?? null) === $id);
-        if ($idx === false || !isset($this->cart['items'][$idx])) {
-            return;
-        }
-
-        $this->cart['items'][$idx]['qty'] = (int)($this->cart['items'][$idx]['qty'] ?? 0) + 1;
-        $this->recalcTotals();
-    }
-
-    public function decrement(string $id)
-    {
-        $items = $this->cart['items'] ?? [];
-        if (!is_array($items) || $items === []) {
-            return;
-        }
-
-        $idx = collect($items)->search(fn($it) => ($it['id'] ?? null) === $id);
-        if ($idx === false || !isset($this->cart['items'][$idx])) {
-            return;
-        }
-
-        $currentQty = (int)($this->cart['items'][$idx]['qty'] ?? 1);
-        $this->cart['items'][$idx]['qty'] = max(1, $currentQty - 1);
-        $this->recalcTotals();
-    }
-
-
     public function remove(string $id, ECommerceService $svc)
     {
         $this->cart = $svc->removeCartItem($id);
@@ -94,6 +60,7 @@ class MiniCart extends Component
         foreach (($this->cart['items'] ?? []) as $it) {
             $svc->updateCartItem($it['id'], (int)$it['qty']);
         }
+        // Refresh the cart data after updates
         $this->cart = $svc->getCart();
         return redirect()->route('shop.checkout');
     }
@@ -118,5 +85,22 @@ class MiniCart extends Component
     public function render()
     {
         return view('livewire.frontend.ecommerce.mini-cart');
+    }
+
+    /**
+     * Check if there are any quantity errors in the cart
+     */
+    public function hasQuantityErrors(): bool
+    {
+        foreach (($this->cart['items'] ?? []) as $item) {
+            $maxQtyPerOrder = (int)($item['max_quantity_per_order'] ?? 0);
+            $currentQty = (int)($item['qty'] ?? 0);
+            
+            if ($maxQtyPerOrder > 0 && $currentQty > $maxQtyPerOrder) {
+                return true;
+            }
+        }
+        
+        return false;
     }
 }

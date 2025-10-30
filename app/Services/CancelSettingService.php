@@ -1,7 +1,7 @@
 <?php
 namespace App\Services;
 
-use App\Models\CancelSetting;
+use App\Models\Room\CancelSettingModel;
 use Illuminate\Support\Facades\Storage;
 
 class CancelSettingService
@@ -14,7 +14,7 @@ class CancelSettingService
    {
         try {
             // Get the single configuration record (singleton)
-            $data = CancelSetting::first();
+            $data = CancelSettingModel::first();
             
             return [
                 'status' => self::STATUS_SUCCESS,
@@ -33,13 +33,13 @@ class CancelSettingService
     {
         try {
             if ($editId) {
-                $record = CancelSetting::findOrFail($editId);
+                $record = CancelSettingModel::findOrFail($editId);
                 $record->update($data);
                 $cancelSettingId = $record->id;
 
             } else {
                 // Create new record
-                $cancelSettingId = CancelSetting::create($data)->id;
+                $cancelSettingId = CancelSettingModel::create($data)->id;
             }
 
             return [
@@ -65,7 +65,7 @@ class CancelSettingService
     public function deleteCancelSetting($deleteId): array
     {
         try {
-            $cancelSetting = CancelSetting::findOrFail($deleteId);
+            $cancelSetting = CancelSettingModel::findOrFail($deleteId);
             $cancelSetting->delete();
             
             return [

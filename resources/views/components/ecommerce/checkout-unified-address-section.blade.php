@@ -166,7 +166,7 @@
                         wire:click="togglePaymentSection"
                         @if(!$selectedBillingAddressId || ($requiresShipping && !$selectedShippingAddressId)) disabled @endif
                     >
-                        Continue to Payment
+                        Payment Card Details
                     </button>
                 </div>
             @else

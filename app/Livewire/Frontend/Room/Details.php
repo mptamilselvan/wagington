@@ -3,35 +3,43 @@
 namespace App\Livewire\Frontend\Room;
 
 use Livewire\Component;
-use App\Services\RoomService;
-use App\Models\RoomModel;
+use App\Services\Frontend\Room\RoomService;
+use App\Models\Room\RoomModel;
 use Illuminate\Support\Collection;
 
 class Details extends Component
 {
-    public $room = null;
+    public $roomType = null;
     public Collection $relatedRooms;
     public $slug;
     public $relatedOffset = 0;
     public $relatedLimit = 5;
     public $hasMoreRelated = true;
-    protected ?RoomService $svc = null;
+    protected ?RoomService $roomService = null;
 
-    public function mount($slug = null, RoomService $svc)
+    // Pricing options
+    public $priceOptions = [];
+    public $selectedPriceOptionId = null;
+    public $selectedPrice = null;
+
+    public function mount($slug = null)
     {
         $this->slug = $slug;
-        $this->svc = $svc;
+        $this->roomService = new RoomService();
         $this->relatedRooms = collect();
         
         if (!$slug) {
             abort(404, 'Room slug is required');
         }
         
-        $this->room = $this->svc->getRoomBySlug($slug);
+        $this->roomType = $this->roomService->getRoomTypeBySlug($slug);
         
-        if (!$this->room) {
-            abort(404, 'Room not found');
+        if (!$this->roomType) {
+            abort(404, 'Room type not found');
         }
+
+        // Load room price options for this room type
+        $this->loadPriceOptions();
 
         // Load initial related room types
         $this->loadRelatedRooms();
@@ -39,17 +47,17 @@ class Details extends Component
 
     public function openBooking()
     {
-        $this->dispatch('open-booking', roomId: $this->room->id);
+        $this->dispatch('open-booking', roomTypeId: $this->roomType->id);
     }
 
     public function loadNextRelated()
     {
         $this->ensureService();
         $this->relatedOffset += $this->relatedLimit;
-        $this->relatedRooms = $this->svc->getRelatedRoomTypes($this->room, $this->relatedLimit, $this->relatedOffset);
+        $this->relatedRooms = $this->roomService->getRelatedRoomTypes($this->roomType, $this->relatedLimit, $this->relatedOffset);
         
         // Check if there are more rooms available for next page
-        $nextBatch = $this->svc->getRelatedRoomTypes($this->room, $this->relatedLimit, $this->relatedOffset + $this->relatedLimit);
+        $nextBatch = $this->roomService->getRelatedRoomTypes($this->roomType, $this->relatedLimit, $this->relatedOffset + $this->relatedLimit);
         $this->hasMoreRelated = $nextBatch->count() > 0;
     }
 
@@ -57,27 +65,56 @@ class Details extends Component
     {
         $this->ensureService();
         $this->relatedOffset = max(0, $this->relatedOffset - $this->relatedLimit);
-        $this->relatedRooms = $this->svc->getRelatedRoomTypes($this->room, $this->relatedLimit, $this->relatedOffset);
+        $this->relatedRooms = $this->roomService->getRelatedRoomTypes($this->roomType, $this->relatedLimit, $this->relatedOffset);
         
         // Check if there are more rooms available for next page
-        $nextBatch = $this->svc->getRelatedRoomTypes($this->room, $this->relatedLimit, $this->relatedOffset + $this->relatedLimit);
+        $nextBatch = $this->roomService->getRelatedRoomTypes($this->roomType, $this->relatedLimit, $this->relatedOffset + $this->relatedLimit);
         $this->hasMoreRelated = $nextBatch->count() > 0;
     }
 
     private function loadRelatedRooms()
     {
         $this->ensureService();
-        $this->relatedRooms = $this->svc->getRelatedRoomTypes($this->room, $this->relatedLimit, $this->relatedOffset);
+        $this->relatedRooms = $this->roomService->getRelatedRoomTypes($this->roomType, $this->relatedLimit, $this->relatedOffset);
         
         // Check if there are more rooms available
-        $nextBatch = $this->svc->getRelatedRoomTypes($this->room, $this->relatedLimit, $this->relatedOffset + $this->relatedLimit);
+        $nextBatch = $this->roomService->getRelatedRoomTypes($this->roomType, $this->relatedLimit, $this->relatedOffset + $this->relatedLimit);
         $this->hasMoreRelated = $nextBatch->count() > 0;
     }
 
     private function ensureService()
     {
-        if ($this->svc === null) {
-            $this->svc = app(RoomService::class);
+        if ($this->roomService === null) {
+            $this->roomService = new RoomService();
+        }
+    }
+
+    private function loadPriceOptions(): void
+    {
+        $options = \App\Models\Room\RoomPriceOptionModel::where('room_type_id', $this->roomType->id)
+            ->orderBy('no_of_days')
+            ->get(['id','label','no_of_days','price']);
+        $this->priceOptions = $options->map(function($opt){
+            return [
+                'value' => $opt->id,
+                'option' => ($opt->no_of_days . ' ' . ($opt->label ?? 'D')),
+                'price' => $opt->price,
+            ];
+        })->toArray();
+
+        if (!empty($this->priceOptions)) {
+            $this->selectedPriceOptionId = $this->priceOptions[0]['value'];
+            $this->selectedPrice = $this->priceOptions[0]['price'];
+        }
+    }
+
+    public function updatedSelectedPriceOptionId($value): void
+    {
+        foreach ($this->priceOptions as $opt) {
+            if ((int)$opt['value'] === (int)$value) {
+                $this->selectedPrice = $opt['price'];
+                break;
+            }
         }
     }
 

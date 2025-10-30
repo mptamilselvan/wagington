@@ -922,6 +922,12 @@ class CheckoutService
             foreach ($cart['items'] as $it) {
                 $variant = ProductVariant::with('product')->find($it['variant_id']);
                 $reservedPart = (int)($it['reserved_quantity'] ?? 0);
+                
+                // Determine initial fulfillment status and quantity
+                $isShippable = $variant?->product->shippable ?? true;
+                $initialFulfillmentStatus = $isShippable ? 'pending' : 'awaiting_handover';
+                // fulfilled_quantity should be 0 initially, even for non-shippable items
+                $initialFulfilledQuantity = 0;
 
                 $oi = OrderItem::create([
                     'order_id' => $order->id,
@@ -933,7 +939,8 @@ class CheckoutService
                     'product_attributes' => $variant?->variant_attributes ?? [],
                     'quantity' => $it['qty'],
                     'reserved_quantity' => $reservedPart,
-                    'fulfilled_quantity' => 0,
+                    'fulfilled_quantity' => $initialFulfilledQuantity,
+                    'fulfillment_status' => $initialFulfillmentStatus,
                     'unit_price' => $it['unit_price'],
                     'total_price' => (float)$it['unit_price'] * (int)$it['qty'],
                 ]);
@@ -954,6 +961,11 @@ class CheckoutService
                         'reserved_quantity' => $reservedForThisAddon,
                     ]);
                     
+                    $addonProduct = \App\Models\Product::find($ad['product_id'] ?? null);
+                    $addonFulfillmentStatus = $addonProduct?->shippable ? 'pending' : 'awaiting_handover';
+                    // fulfilled_quantity should be 0 initially, even for non-shippable addons
+                    $addonFulfilledQuantity = 0;
+                    
                     OrderAddon::create([
                         'order_item_id' => $oi->id,
                         'addon_product_id' => $ad['product_id'] ?? null,
@@ -964,7 +976,8 @@ class CheckoutService
                         'was_required' => (bool)($ad['is_required'] ?? false),
                         'quantity' => $addonQty,
                         'reserved_quantity' => $reservedForThisAddon,
-                        'fulfilled_quantity' => 0,
+                        'fulfilled_quantity' => $addonFulfilledQuantity,
+                        'fulfillment_status' => $addonFulfillmentStatus,
                         'unit_price' => (float)($ad['unit_price'] ?? 0),
                         'total_price' => (float)($ad['subtotal'] ?? 0),
                     ]);
@@ -1013,7 +1026,7 @@ class CheckoutService
 
             try {
                 // $idempotencyKey = 'checkout_' . $order->id . '_attempt_' . $attempts . '_' . time();
-                $idempotencyKey = 'checkout_' . $order->id . '_' . md5($order->id . $totalAmount);
+                $idempotencyKey = 'checkout_' . $order->id . '_attempt_' . $attempts . '_' . md5($order->id . $totalAmount . $attempts);
 
 
                 $result = $this->payments->chargePaymentMethod(

@@ -15,7 +15,7 @@ class RoomTypeRules
                 'string',
                 'max:255',
                 function ($attribute, $value, $fail) use ($editId) {
-                    $query = \App\Models\RoomTypeModel::whereRaw('LOWER(name) = LOWER(?)', [$value]);
+                    $query = \App\Models\Room\RoomTypeModel::whereRaw('LOWER(name) = LOWER(?)', [$value]);
                     
                     if ($editId) {
                         $query->where('id', '!=', $editId);
@@ -32,7 +32,7 @@ class RoomTypeRules
                 'max:255',
                 'regex:/^[a-z0-9]+(?:-[a-z0-9]+)*$/',
                 function ($attribute, $value, $fail) use ($editId) {
-                    $query = \App\Models\RoomTypeModel::whereRaw('LOWER(slug) = LOWER(?)', [$value]);
+                    $query = \App\Models\Room\RoomTypeModel::whereRaw('LOWER(slug) = LOWER(?)', [$value]);
                     
                     if ($editId) {
                         $query->where('id', '!=', $editId);
@@ -76,11 +76,12 @@ class RoomTypeRules
                 'required',
                 'string',
             ],
-            'images'   => [
+            'images'   => array_filter([
                 $editId ? 'nullable' : 'required',
                 'array',
+                $editId ? null : 'min:1',
                 'max:4',
-            ],
+            ]),
             'images.*'   => [
                 $editId ? 'nullable' : 'required',
                 'image',
@@ -251,6 +252,7 @@ class RoomTypeRules
             'images.required' => 'At least one image is required when creating a new room type.',
             'images.nullable' => 'Images are optional when editing an existing room type.',
             'images.array' => 'Images must be an array.',
+            'images.min' => 'At least one image is required when creating a new room type.',
             'images.max' => 'Images must be less than 4.',
             'images.*.required' => 'At least one image is required when creating a new room type.',
             'images.*.nullable' => 'Images are optional when editing an existing room type.',

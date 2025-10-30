@@ -185,9 +185,9 @@
                     <!-- Region -->
                     <div>
                         <label for="region" class="block text-sm font-medium text-gray-700 mb-2">Region *</label>
-               <input type="text" id="region" wire:model="region" 
-                   class="w-full px-3 py-2 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-transparent"
-                   placeholder="e.g., SG, US, EU, etc." required>
+                        <input type="text" id="region" wire:model="region" 
+                            class="w-full px-3 py-2 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-transparent"
+                            placeholder="e.g., SG, US, EU, etc." required>
                         @error('region') <span class="text-sm text-red-600">{{ $message }}</span> @enderror
                     </div>
 
@@ -230,9 +230,9 @@
                     <!-- Cost -->
                     <div>
                         <label for="cost" class="block text-sm font-medium text-gray-700 mb-2">Shipping Cost *</label>
-               <input type="number" id="cost" wire:model="cost" step="0.01" min="0"
-                   class="w-full px-3 py-2 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-transparent"
-                   placeholder="0.00" required>
+                        <input type="number" id="cost" wire:model="cost" step="0.01" min="0"
+                            class="w-full px-3 py-2 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-transparent"
+                            placeholder="0.00" required>
                         @error('cost') <span class="text-sm text-red-600">{{ $message }}</span> @enderror
                     </div>
 

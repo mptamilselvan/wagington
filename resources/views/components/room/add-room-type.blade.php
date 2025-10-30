@@ -18,6 +18,7 @@
                     </div>
                 </div>
             </div>
+            <div x-data x-init="window.scrollTo({ top: 0, behavior: 'smooth' })"></div>
         @endif
         
         @error('save')
@@ -29,6 +30,7 @@
                     <span class="text-red-800 font-medium">{{ $message }}</span>
                 </div>
             </div>
+            <div x-data x-init="window.scrollTo({ top: 0, behavior: 'smooth' })"></div>
         @enderror
         
         <!-- Product Name and Slug - Same Row -->

@@ -5,6 +5,7 @@ namespace App\Models;
 use Illuminate\Database\Eloquent\Factories\HasFactory;
 use Illuminate\Database\Eloquent\Model;
 use Illuminate\Database\Eloquent\SoftDeletes;
+use App\Models\OrderAddon;
 
 class Order extends Model
 {
@@ -58,5 +59,145 @@ class Order extends Model
     public function appliedVouchers()
     {
         return $this->hasMany(OrderVoucher::class)->orderBy('stack_order');
+    }
+
+    public function addons()
+    {
+        return $this->hasManyThrough(
+            OrderAddon::class,
+            OrderItem::class,
+            'order_id', // Foreign key on OrderItem
+            'order_item_id', // Foreign key on OrderAddon
+            'id', // Local key on Order
+            'id' // Local key on OrderItem
+        );
+    }
+
+    // Fulfillment helper methods
+    public function shippableItems()
+    {
+        return $this->hasMany(OrderItem::class)->where('fulfillment_status', '!=', 'awaiting_handover');
+    }
+
+    public function nonShippableItems()
+    {
+        return $this->hasMany(OrderItem::class)->where('fulfillment_status', 'awaiting_handover');
+    }
+
+    /**
+     * Get the fulfillment progress percentage for this order
+     * 
+     * Note: For best performance, eager load relationships before calling:
+     * $order->load(['items', 'items.addons']) or Order::with(['items', 'items.addons'])->find($id)
+     * 
+     * @return float Percentage of items fulfilled (0-100)
+     */
+    public function getFulfillmentProgress()
+    {
+        // Ensure both items and their addons are loaded
+        $this->loadMissing(['items', 'items.addons']);
+        
+        // Get all items and their addons from the loaded relationships
+        $allItems = $this->items;
+        $allAddons = $allItems->flatMap(function ($item) {
+            return $item->addons ?? collect();
+        });
+        
+        $totalItems = $allItems->count() + $allAddons->count();
+        if ($totalItems === 0) {
+            return 100;
+        }
+        
+        $fulfilledItems = $allItems->whereIn('fulfillment_status', ['delivered', 'handed_over'])->count() +
+                         $allAddons->whereIn('fulfillment_status', ['delivered', 'handed_over'])->count();
+        
+        return round(($fulfilledItems / $totalItems) * 100, 2);
+    }
+
+    public function isFullyFulfilled()
+    {
+        // Count items that are not fully fulfilled
+        $pendingItemsCount = $this->items()
+            ->whereNotIn('fulfillment_status', ['delivered', 'handed_over'])
+            ->count();
+
+        // Count addons that are not fully fulfilled
+        $pendingAddonsCount = OrderAddon::whereHas('orderItem', function($query) {
+            $query->where('order_id', $this->id);
+        })
+        ->whereNotIn('fulfillment_status', ['delivered', 'handed_over'])
+        ->count();
+
+        // Return true only if there are no pending items or addons
+        return $pendingItemsCount === 0 && $pendingAddonsCount === 0;
+    }
+
+    /**
+     * Get a comprehensive fulfillment summary for this order
+     * 
+     * Note: For best performance, eager load relationships before calling:
+     * $order->load(['items', 'items.addons']) or Order::with(['items', 'items.addons'])->find($id)
+     * 
+     * @return array Fulfillment summary with counts and status
+     */
+    public function getFulfillmentSummary()
+    {
+        // Ensure both items and their addons are loaded
+        $this->loadMissing(['items', 'items.addons']);
+
+        // Get all items and their addons from the loaded relationships
+        $items = $this->items;
+        $addons = $items->flatMap(function ($item) {
+            return $item->addons ?? collect();
+        });
+
+        // Get status counts using countBy for both items and addons
+        $itemStatusCounts = $items->countBy('fulfillment_status');
+        $addonStatusCounts = $addons->countBy('fulfillment_status');
+
+        // Helper function to get count for a status with default 0
+        $getCount = function($counts, $status) {
+            return $counts[$status] ?? 0;
+        };
+
+        // Calculate fulfilled counts once
+        $fulfilledItemsCount = $items->whereIn('fulfillment_status', ['delivered', 'handed_over'])->count();
+        $fulfilledAddonsCount = $addons->whereIn('fulfillment_status', ['delivered', 'handed_over'])->count();
+        
+        // Calculate total counts
+        $totalItems = $items->count();
+        $totalAddons = $addons->count();
+        $totalCount = $totalItems + $totalAddons;
+
+        // Calculate progress percentage
+        $progress = $totalCount === 0 ? 100 : 
+            round((($fulfilledItemsCount + $fulfilledAddonsCount) / $totalCount) * 100, 2);
+        
+        return [
+            'order_id' => $this->id,
+            'order_number' => $this->order_number,
+            'overall_status' => $this->status,
+            'progress_percentage' => $progress,
+            'is_fully_fulfilled' => ($totalCount === 0) || 
+                                  ($fulfilledItemsCount + $fulfilledAddonsCount === $totalCount),
+            'items' => [
+                'total' => $totalItems,
+                'pending' => $getCount($itemStatusCounts, 'pending'),
+                'processing' => $getCount($itemStatusCounts, 'processing'),
+                'shipped' => $getCount($itemStatusCounts, 'shipped'),
+                'delivered' => $getCount($itemStatusCounts, 'delivered'),
+                'awaiting_handover' => $getCount($itemStatusCounts, 'awaiting_handover'),
+                'handed_over' => $getCount($itemStatusCounts, 'handed_over'),
+            ],
+            'addons' => [
+                'total' => $totalAddons,
+                'pending' => $getCount($addonStatusCounts, 'pending'),
+                'processing' => $getCount($addonStatusCounts, 'processing'),
+                'shipped' => $getCount($addonStatusCounts, 'shipped'),
+                'delivered' => $getCount($addonStatusCounts, 'delivered'),
+                'awaiting_handover' => $getCount($addonStatusCounts, 'awaiting_handover'),
+                'handed_over' => $getCount($addonStatusCounts, 'handed_over'),
+            ],
+        ];
     }
 }

@@ -617,9 +617,11 @@ class PaymentService
     }
 
     /**
-     * Determine if we should force the new payment method to be default.
+     * Determine if we should force the customer's only payment method to be default.
+     * This ensures that when a customer has exactly one payment method, it is set as default
+     * if no default is currently set.
      */
-    private function shouldForceDefaultPaymentMethod(string $customerId, string $paymentMethodId = null): bool
+    private function shouldForceDefaultPaymentMethod(string $customerId): bool
     {
         try {
             $paymentMethods = PaymentMethod::all([
@@ -748,7 +750,7 @@ class PaymentService
 
             $shouldSetAsDefault = $setAsDefault;
 
-            if (!$shouldSetAsDefault && $this->shouldForceDefaultPaymentMethod($customer->id, $paymentMethod->id)) {
+            if (!$shouldSetAsDefault && $this->shouldForceDefaultPaymentMethod($customer->id)) {
                 $shouldSetAsDefault = true;
             }
 
@@ -792,7 +794,7 @@ class PaymentService
 
             $shouldSetAsDefault = $setAsDefault;
 
-            if (!$shouldSetAsDefault && $this->shouldForceDefaultPaymentMethod($customer->id, $paymentMethod->id)) {
+            if (!$shouldSetAsDefault && $this->shouldForceDefaultPaymentMethod($customer->id)) {
                 $shouldSetAsDefault = true;
             }
 

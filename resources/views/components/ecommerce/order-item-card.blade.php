@@ -38,22 +38,57 @@
                     </p>
                 @endif
                 
-                <!-- Status Badge -->
+                <!-- Fulfillment Status Badge -->
                 <div class="mt-2">
                     @php
-                        $status = $order?->status ?? 'processing';
-                        $statusConfig = match($status) {
-                            'processing' => ['bg-blue-100 text-blue-800', 'Processing'],
-                            'partially_backordered' => ['bg-yellow-100 text-yellow-800', 'Partially Backordered'],
-                            'backordered' => ['bg-orange-100 text-orange-800', 'Backordered'],
-                            'shipped' => ['bg-green-100 text-green-800', 'Shipped'],
-                            'delivered' => ['bg-gray-100 text-gray-800', 'Delivered'],
-                            default => ['bg-blue-100 text-blue-800', ucfirst($status)]
+                        $fulfillmentStatus = $item->fulfillment_status ?? 'pending';
+                        $statusConfig = match($fulfillmentStatus) {
+                            'pending' => ['bg-gray-100 text-gray-800', 'Pending'],
+                            'processing' => ['bg-yellow-100 text-yellow-800', 'Processing'],
+                            'shipped' => ['bg-blue-100 text-blue-800', 'Shipped'],
+                            'delivered' => ['bg-green-100 text-green-800', 'Delivered'],
+                            'awaiting_handover' => ['bg-purple-100 text-purple-800', 'Digital'],
+                            default => ['bg-gray-100 text-gray-800', ucfirst($fulfillmentStatus)]
                         };
                     @endphp
                     <span class="inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-medium {{ $statusConfig[0] }}">
+                        @if($fulfillmentStatus === 'delivered')
+                            <svg class="w-3 h-3 mr-1" fill="currentColor" viewBox="0 0 20 20">
+                                <path fill-rule="evenodd" d="M16.707 5.293a1 1 0 010 1.414l-8 8a1 1 0 01-1.414 0l-4-4a1 1 0 011.414-1.414L8 12.586l7.293-7.293a1 1 0 011.414 0z" clip-rule="evenodd"></path>
+                            </svg>
+                        @elseif($fulfillmentStatus === 'shipped')
+                            <svg class="w-3 h-3 mr-1" fill="currentColor" viewBox="0 0 20 20">
+                                <path d="M8 16.5a1.5 1.5 0 11-3 0 1.5 1.5 0 013 0zM15 16.5a1.5 1.5 0 11-3 0 1.5 1.5 0 013 0z"></path>
+                                <path d="M3 4a1 1 0 00-1 1v10a1 1 0 001 1h1.05a2.5 2.5 0 014.9 0H10a1 1 0 001-1V5a1 1 0 00-1-1H3zM14 7a1 1 0 00-1 1v6.05A2.5 2.5 0 0115.95 16H17a1 1 0 001-1V8a1 1 0 00-1-1h-3z"></path>
+                            </svg>
+                        @elseif($fulfillmentStatus === 'processing')
+                            <svg class="w-3 h-3 mr-1" fill="currentColor" viewBox="0 0 20 20">
+                                <path fill-rule="evenodd" d="M4 2a1 1 0 011 1v2.101a7.002 7.002 0 0111.601 2.566 1 1 0 11-1.885.666A5.002 5.002 0 005.999 7H9a1 1 0 010 2H4a1 1 0 01-1-1V3a1 1 0 011-1zm.008 9.057a1 1 0 011.276.61A5.002 5.002 0 0014.001 13H11a1 1 0 110-2h5a1 1 0 011 1v5a1 1 0 11-2 0v-2.101a7.002 7.002 0 01-11.601-2.566 1 1 0 01.61-1.276z" clip-rule="evenodd"></path>
+                            </svg>
+                        @elseif($fulfillmentStatus === 'awaiting_handover')
+                            <svg class="w-3 h-3 mr-1" fill="currentColor" viewBox="0 0 20 20">
+                                <path fill-rule="evenodd" d="M3 4a1 1 0 011-1h12a1 1 0 110 2H4a1 1 0 01-1-1zm0 4a1 1 0 011-1h12a1 1 0 110 2H4a1 1 0 01-1-1zm0 4a1 1 0 011-1h12a1 1 0 110 2H4a1 1 0 01-1-1zm0 4a1 1 0 011-1h12a1 1 0 110 2H4a1 1 0 01-1-1z" clip-rule="evenodd"></path>
+                            </svg>
+                        @endif
                         {{ $statusConfig[1] }}
                     </span>
+                    
+                    <!-- Fulfillment Progress -->
+                    @if($fulfillmentStatus !== 'awaiting_handover')
+                        @php
+                            $progress = (int) ($item->getFulfillmentProgress() ?? 0);
+                            $progress = max(0, min(100, $progress)); // Clamp between 0-100
+                        @endphp
+                        <div class="mt-1">
+                            <div class="flex items-center space-x-2">
+                                <div class="flex-1 bg-gray-200 rounded-full h-1.5 w-16">
+                                    <div class="bg-blue-600 h-1.5 rounded-full transition-all duration-300" 
+                                         style="width: {{ $progress }}%"></div>
+                                </div>
+                                <span class="text-xs text-gray-500">{{ $progress }}%</span>
+                            </div>
+                        </div>
+                    @endif
                 </div>
 
                 <!-- Expected Delivery (if available) -->

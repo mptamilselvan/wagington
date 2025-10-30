@@ -194,10 +194,21 @@ class ProductManagement extends Component
                 'variantCombinations.*.barcode' => 'nullable|string|max:100',
                 'variantCombinations.*.stock_quantity' => 'required|integer|min:0',
                 'variantCombinations.*.min_quantity_alert' => 'required|integer|min:0',
-                'variantCombinations.*.max_quantity_per_order' => 'required|integer|min:1',
+                'variantCombinations.*.max_quantity_per_order' => ($this->product_type === 'addon') ? 'required|integer|in:10000' : 'required|integer|min:1',
                 'variantCombinations.*.cost_price' => 'required|numeric|min:0',
                 'variantCombinations.*.selling_price' => 'required|numeric|min:0',
-                'variantCombinations.*.compare_price' => 'nullable|numeric|min:0',
+                'variantCombinations.*.compare_price' => [
+                    'nullable', 'numeric', 'min:0',
+                    function ($attr, $value, $fail) {
+                        // Extract the index from the attribute name (e.g., variantCombinations.0.compare_price -> 0)
+                        $index = explode('.', $attr)[1];
+                        $sellingPrice = $this->variantCombinations[$index]['selling_price'] ?? null;
+                        
+                        if ($value !== null && $sellingPrice !== null && $value < $sellingPrice) {
+                            $fail('Compare price must be greater than or equal to Selling price.');
+                        }
+                    }
+                ],
                 'variantCombinations.*.track_inventory' => 'required|boolean',
                 'variantCombinations.*.weight_kg' => 'nullable|numeric|min:0',
                 'variantCombinations.*.length_cm' => 'nullable|numeric|min:0',
@@ -237,7 +248,7 @@ class ProductManagement extends Component
                 ],
                 'stock_quantity' => 'required|integer|min:0',
                 'min_quantity_alert' => 'nullable|integer|min:0',
-                'max_quantity_per_order' => 'required|integer|min:1',
+                'max_quantity_per_order' => ($this->product_type === 'addon') ? 'required|integer|in:10000' : 'required|integer|min:1',
                 'weight_kg' => 'nullable|numeric|min:0',
                 'length_cm' => 'nullable|numeric|min:0',
                 'width_cm' => 'nullable|numeric|min:0',
@@ -765,7 +776,7 @@ class ProductManagement extends Component
                 'compare_price' => $variant->compare_price,
                 'stock_quantity' => $variant->stock_quantity,
                 'min_quantity_alert' => $variant->min_quantity_alert,
-                'max_quantity_per_order' => $variant->max_quantity_per_order,
+                'max_quantity_per_order' => ($this->product_type === 'addon') ? 10000 : $variant->max_quantity_per_order,
                 'track_inventory' => $variant->track_inventory,
                 'allow_backorders' => $variant->allow_backorders,
                 'weight_kg' => $variant->weight_kg,
@@ -799,7 +810,7 @@ class ProductManagement extends Component
             $this->compare_price = $variant->compare_price;
             $this->stock_quantity = $variant->stock_quantity;
             $this->min_quantity_alert = $variant->min_quantity_alert;
-            $this->max_quantity_per_order = $variant->max_quantity_per_order;
+            $this->max_quantity_per_order = ($this->product_type === 'addon') ? '10000' : $variant->max_quantity_per_order;
             $this->track_inventory = $variant->track_inventory;
             $this->allow_backorders = $variant->allow_backorders;
             $this->weight_kg = $variant->weight_kg;
@@ -847,7 +858,7 @@ class ProductManagement extends Component
                 'compare_price' => '',
                 'stock_quantity' => 0,
                 'min_quantity_alert' => 5,
-                'max_quantity_per_order' => null,
+                'max_quantity_per_order' => ($this->product_type === 'addon') ? 10000 : null,
                 'track_inventory' => true,
                 'allow_backorders' => false,
                 'weight_kg' => '',
@@ -1012,7 +1023,7 @@ class ProductManagement extends Component
             'compare_price' => '',
             'stock_quantity' => 0,
             'min_quantity_alert' => 5,
-            'max_quantity_per_order' => null,
+            'max_quantity_per_order' => ($this->product_type === 'addon') ? 10000 : null,
             'track_inventory' => true,
             'allow_backorders' => false,
             'weight_kg' => '',
@@ -1732,7 +1743,7 @@ class ProductManagement extends Component
                 'compare_price' => $combination['compare_price'] ?: null,
                 'stock_quantity' => $combination['stock_quantity'] ?: 0,
                 'min_quantity_alert' => $combination['min_quantity_alert'] ?: 5,
-                'max_quantity_per_order' => $combination['max_quantity_per_order'] ?: 10,
+                'max_quantity_per_order' => ($this->product_type === 'addon') ? 10000 : ($combination['max_quantity_per_order'] ?: 10),
                 'track_inventory' => $combination['track_inventory'] ?? true,
                 'allow_backorders' => $combination['allow_backorders'] ?? false,
                 'weight_kg' => $combination['weight_kg'] ?: null,
@@ -1800,7 +1811,7 @@ class ProductManagement extends Component
                             'file_url' => $publicUrl,
                             'alt_text' => $product->name . ' option',
                             'display_order' => 0,
-                            'is_primary' => true,
+                            'is_primary' => (bool)($variantData['is_primary'] ?? false), // Only set as primary if the variant is primary
                         ]);
                     }
                 } elseif ($hasExistingImage) {
@@ -1821,7 +1832,7 @@ class ProductManagement extends Component
                         'file_url' => $existingMedia->file_url,
                         'alt_text' => $existingMedia->alt_text,
                         'display_order' => $existingMedia->display_order,
-                        'is_primary' => $existingMedia->is_primary,
+                        'is_primary' => (bool)($variantData['is_primary'] ?? false), // Only set as primary if the variant is primary
                         'file_size' => $existingMedia->file_size,
                         'mime_type' => $existingMedia->mime_type,
                         'width' => $existingMedia->width,
@@ -1890,7 +1901,7 @@ class ProductManagement extends Component
             'compare_price' => $this->compare_price ?: null,
             'stock_quantity' => $this->stock_quantity,
             'min_quantity_alert' => $this->min_quantity_alert ?: 5,
-            'max_quantity_per_order' => $this->max_quantity_per_order ?: 10,
+            'max_quantity_per_order' => ($this->product_type === 'addon') ? 10000 : ($this->max_quantity_per_order ?: 10),
             'track_inventory' => $this->track_inventory,
             'allow_backorders' => $this->allow_backorders,
             'weight_kg' => $this->weight_kg ?: null,
@@ -2360,7 +2371,7 @@ class ProductManagement extends Component
         $this->compare_price = '';
         $this->stock_quantity = '';
         $this->min_quantity_alert = '';
-        $this->max_quantity_per_order = '';
+        $this->max_quantity_per_order = ($this->product_type === 'addon') ? '10000' : '';
         $this->track_inventory = true;
         $this->allow_backorders = false;
         $this->weight_kg = '';

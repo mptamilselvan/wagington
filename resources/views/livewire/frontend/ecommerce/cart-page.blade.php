@@ -27,27 +27,53 @@
                     @php
                         $maxQty = 999999;
                         if (!empty($item['track_inventory'])) {
-                            $maxQty = (int)($item['allow_backorders'] ? ($item['max_quantity_per_order'] ?: 999999) : ($item['available'] ?? 0));
-                            $maxQty = max(1, $maxQty);
+                            // Get the max quantity per order setting (if set)
+                            $maxQtyPerOrder = (int)($item['max_quantity_per_order'] ?? 0);
+                            
+                            // If max_quantity_per_order is set and greater than 0, use it as the primary limit
+                            if ($maxQtyPerOrder > 0) {
+                                // If backorders are allowed, we can go up to max_quantity_per_order
+                                if ($item['allow_backorders']) {
+                                    $maxQty = $maxQtyPerOrder;
+                                } else {
+                                    // If backorders are not allowed, we're limited by the lesser of:
+                                    // 1. max_quantity_per_order
+                                    // 2. available stock
+                                    $available = (int)($item['available'] ?? 0);
+                                    $maxQty = min($maxQtyPerOrder, $available);
+                                    // Ensure we have at least 1 if we have any available stock
+                                    $maxQty = max(1, $maxQty);
+                                }
+                            } else {
+                                // No max_quantity_per_order set, use original logic
+                                $maxQty = (int)($item['allow_backorders'] ? 999999 : ($item['available'] ?? 0));
+                                $maxQty = max(1, $maxQty);
+                            }
                         }
                     @endphp
-                    <button wire:click="decrement('{{ $item['id'] }}')" class="px-2 py-1 border rounded">-</button>
-                    <div class="w-8 text-center">{{ $item['qty'] }}</div>
-                    <button wire:click="increment('{{ $item['id'] }}')" class="px-2 py-1 border rounded" @disabled($item['qty'] >= $maxQty)>+</button>
+                    <input type="number" min="1" max="{{ $maxQty }}" wire:model.live="cart.items.{{ $loop->index }}.qty" class="w-24 text-center border rounded" />
                 </div>
                 <div class="w-24 text-right">${{ number_format($item['subtotal'], 2) }}</div>
-                @php $isLow = ($item['available'] ?? 0) > 0 && ($item['available'] ?? 0) <= ($item['min_quantity_alert'] ?? 0); @endphp
-                <div class="w-40 text-right text-xs {{ ($item['available'] ?? 0) > 0 ? ($isLow ? 'text-yellow-600' : 'text-green-600') : 'text-red-600' }}" @if($isLow) title="Only {{ $item['available'] }} left" @endif>
-                    {{ $item['availability_label'] ?? '' }}
-                    @php
-                        $bq = (int)($item['backorder_qty'] ?? 0);
-                    @endphp
-                    @if($bq > 0)
-                        <div class="mt-1 text-[11px] text-gray-500">
-                            Backorder {{ $bq }}
-                        </div>
-                    @endif
-                </div>
+                @php 
+                    $isLow = ($item['available'] ?? 0) > 0 && ($item['available'] ?? 0) <= ($item['min_quantity_alert'] ?? 0);
+                    $maxQtyPerOrder = (int)($item['max_quantity_per_order'] ?? 0);
+                    $currentQty = (int)($item['qty'] ?? 0);
+                @endphp
+                @if($maxQtyPerOrder > 0 && $currentQty > $maxQtyPerOrder)
+                    <div class="text-xs text-red-600 font-medium">Maximum quantity allowed is {{ $maxQtyPerOrder }}</div>
+                @else
+                    <div class="w-40 text-right text-xs {{ ($item['available'] ?? 0) > 0 ? ($isLow ? 'text-yellow-600' : 'text-green-600') : 'text-red-600' }}" @if($isLow) title="Only {{ $item['available'] }} left" @endif>
+                        {{ $item['availability_label'] ?? '' }}
+                        @php
+                            $bq = (int)($item['backorder_qty'] ?? 0);
+                        @endphp
+                        @if($bq > 0)
+                            <div class="mt-1 text-[11px] text-gray-500">
+                                Backorder {{ $bq }}
+                            </div>
+                        @endif
+                    </div>
+                @endif
                 <button wire:click="remove('{{ $item['id'] }}')" class="text-red-600 text-sm">Remove</button>
             </div>
         @empty
@@ -155,10 +181,13 @@
     </div>
 
     <div class="mt-6 flex justify-end" x-data="{ showAuthPrompt:false }">
+        @if($this->hasQuantityErrors())
+            <div class="text-red-600 text-sm mb-2">Please fix quantity errors before proceeding to checkout.</div>
+        @endif
         @auth
-            <button wire:click="saveAndProceed" class="px-5 py-3 rounded bg-blue-600 text-white">Proceed to checkout</button>
+            <button wire:click="saveAndProceed" @disabled($this->hasQuantityErrors()) class="px-5 py-3 rounded {{ $this->hasQuantityErrors() ? 'bg-gray-400 text-gray-200 cursor-not-allowed' : 'bg-blue-600 text-white hover:bg-blue-700' }}">Proceed to checkout</button>
         @else
-            <button type="button" @click="showAuthPrompt=true" class="px-5 py-3 rounded bg-blue-600 text-white">Proceed to checkout</button>
+            <button type="button" @click="showAuthPrompt=true" @disabled($this->hasQuantityErrors()) class="px-5 py-3 rounded {{ $this->hasQuantityErrors() ? 'bg-gray-400 text-gray-200 cursor-not-allowed' : 'bg-blue-600 text-white hover:bg-blue-700' }}">Proceed to checkout</button>
 
             <!-- Guest Auth Prompt -->
             <div x-cloak x-show="showAuthPrompt" class="fixed inset-0 z-50 flex items-center justify-center">

@@ -46,7 +46,7 @@ use App\Helpers\CurrencyHelper;
     $serviceShipping = (float)($checkoutSummary['shipping_amount'] ?? 0);
     
     // Show discounted subtotal when coupons are applied
-    $displaySubtotal = $serviceSubtotal - $serviceDiscount;
+    $displaySubtotal = max(0, $serviceSubtotal - $serviceDiscount);
 
     $itemTotals = [];
     foreach($cart['items'] ?? [] as $item) {

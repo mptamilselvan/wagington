@@ -18,6 +18,9 @@
                 </div>
             </div>
         @endif
+        @if ($errors->any())
+            <div x-data x-init="window.scrollTo({ top: 0, behavior: 'smooth' })"></div>
+        @endif
         
         @error('update')
             <div class="mb-6 bg-red-50 border border-red-200 rounded-lg p-4">
@@ -28,6 +31,7 @@
                     <span class="text-red-800 font-medium">{{ $message }}</span>
                 </div>
             </div>
+            <div x-data x-init="window.scrollTo({ top: 0, behavior: 'smooth' })"></div>
         @enderror
         <!-- Product Name and Slug - Same Row -->
         <div class="grid grid-cols-1 gap-6 mb-6 md:grid-cols-2">

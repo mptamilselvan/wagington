@@ -81,6 +81,7 @@
                         <th class="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase">Date of Order</th>
                         <th class="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase">Total Amount</th>
                         <th class="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase">Payment Status</th>
+                        <th class="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase">Fulfillment</th>
                         <th class="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase">Total Items</th>
                         <th class="px-6 py-3"></th>
                     </tr>
@@ -102,6 +103,29 @@
                                     <span class="inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-medium bg-yellow-100 text-yellow-800">Pending</span>
                                 @endif
                             </td>
+                            <td class="px-6 py-4 whitespace-nowrap">
+                                @php
+                                    $fulfillmentSummary = $order->getFulfillmentSummary() ?? [];
+                                    $progress = min(max($fulfillmentSummary['progress_percentage'] ?? 0, 0), 100);
+                                @endphp
+                                <div class="flex items-center space-x-2">
+                                    <div class="flex-1 bg-gray-200 rounded-full h-2 w-16">
+                                        <div class="bg-blue-600 h-2 rounded-full" style="width: {{ $progress }}%"></div>
+                                    </div>
+                                    <span class="text-xs text-gray-600">{{ $progress }}%</span>
+                                </div>
+                                <div class="mt-1">
+                                    @if($fulfillmentSummary['is_fully_fulfilled'] ?? false)
+                                        <span class="inline-flex items-center px-2 py-0.5 rounded text-xs font-medium bg-green-100 text-green-800">Complete</span>
+                                    @elseif($order->status === 'partially_shipped')
+                                        <span class="inline-flex items-center px-2 py-0.5 rounded text-xs font-medium bg-yellow-100 text-yellow-800">Partial</span>
+                                    @elseif($order->status === 'shipped')
+                                        <span class="inline-flex items-center px-2 py-0.5 rounded text-xs font-medium bg-blue-100 text-blue-800">Shipped</span>
+                                    @else
+                                        <span class="inline-flex items-center px-2 py-0.5 rounded text-xs font-medium bg-gray-100 text-gray-800">Pending</span>
+                                    @endif
+                                </div>
+                            </td>
                             <td class="px-6 py-4 whitespace-nowrap text-sm text-gray-700">
                                 @php
                                     $itemsQty = $order->items->sum('quantity');
@@ -115,7 +139,7 @@
                         </tr>
                     @empty
                         <tr>
-                            <td colspan="7" class="px-6 py-8 text-center text-sm text-gray-500">No orders found.</td>
+                            <td colspan="8" class="px-6 py-8 text-center text-sm text-gray-500">No orders found.</td>
                         </tr>
                     @endforelse
                 </tbody>

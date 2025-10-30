@@ -246,7 +246,7 @@
                         </div>
 
                         {{-- Invoice Information --}}
-                        @if(!empty($orderDetail['payment']['history']) && !empty($orderDetail['payment']['history'][0]['invoice_url']))
+                        @if(!empty($orderDetail['payment']['history']) && (!empty($orderDetail['payment']['history'][0]['invoice_url']) || !empty($orderDetail['payment']['history'][0]['invoice_pdf_url']) || !empty($orderDetail['payment']['history'][0]['invoice_number'])))
                             @php 
                                 $payment = $orderDetail['payment']['history'][0]; 
                                 // Get the order number from the order detail

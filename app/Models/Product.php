@@ -186,10 +186,35 @@ class Product extends Model
             if ($generalPrimary) {
                 return $generalPrimary;
             }
+            
+            // If no general primary image, look for the primary variant's primary image
+            $primaryVariant = $this->variants()->where('is_primary', true)->first();
+            if ($primaryVariant) {
+                $primaryImage = $primaryVariant->getPrimaryImage();
+                if ($primaryImage) {
+                    return $primaryImage;
+                }
+            }
+            
+            // If still no primary image, get the first variant with a primary media asset
+            $variant = $this->variants()
+                        ->whereHas('mediaAssets', function ($query) {
+                            $query->where('is_primary', true);
+                        })
+                        ->with(['mediaAssets' => function ($query) {
+                            $query->where('is_primary', true);
+                        }])
+                        ->first();
+            
+            if ($variant) {
+                return $variant->mediaAssets->first();
+            }
+            
+            // No primary image found for variant product
+            return null;
         }
 
-        // Fallback to variant primary image
-        // Fallback to variant primary image
+        // For non-variant products or fallback
         $variant = $this->variants()
                     ->whereHas('mediaAssets', function ($query) {
                         $query->where('is_primary', true);

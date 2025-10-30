@@ -16,6 +16,9 @@ class OrderConfirmation extends Mailable
 
     public $order;
     public $user;
+    private ?string $invoicePath = null;
+    private bool $hasInvoice = false;
+    private $latestPayment;
 
     /**
      * Create a new message instance.
@@ -24,6 +27,34 @@ class OrderConfirmation extends Mailable
     {
         $this->order = $order;
         $this->user = $order->user;
+        $this->detectInvoice();
+    }
+
+    /**
+     * Detect and store invoice information for consistent access.
+     */
+    private function detectInvoice(): void
+    {
+        $payment = $this->getLatestPayment();
+        if ($payment && $payment->invoice_pdf_url) {
+            // Assuming invoice_pdf_url is relative to storage/app
+            $path = storage_path('app/' . $payment->invoice_pdf_url);
+            if (file_exists($path)) {
+                $this->invoicePath = $path;
+                $this->hasInvoice = true;
+            }
+        }
+    }
+
+    /**
+     * Get the latest payment for the order, cached to avoid multiple queries.
+     */
+    private function getLatestPayment()
+    {
+        if ($this->latestPayment === null) {
+            $this->latestPayment = $this->order->payments->sortByDesc('id')->first();
+        }
+        return $this->latestPayment;
     }
 
     /**
@@ -31,19 +62,8 @@ class OrderConfirmation extends Mailable
      */
     public function envelope(): Envelope
     {
-        // Decide subject based on whether an invoice PDF is available to attach
-        $payment = $this->order->payments->sortByDesc('id')->first();
-        $hasInvoice = false;
-        if ($payment && $payment->invoice_pdf_url) {
-            // invoice_pdf_url may be an application route or a storage path; only mark as attached when a local file exists
-            $path = public_path($payment->invoice_pdf_url);
-            if (file_exists($path)) {
-                $hasInvoice = true;
-            }
-        }
-
         $subject = 'Success! Your Order #' . $this->order->order_number . ' is Confirmed!';
-        if ($hasInvoice) {
+        if ($this->hasInvoice) {
             $subject .= ' (Invoice Attached)';
         }
 
@@ -77,14 +97,16 @@ class OrderConfirmation extends Mailable
      */
     public function attachments(): array
     {
-        // Attach invoice PDF if available
         $attachments = [];
-        $payment = $this->order->payments->sortByDesc('id')->first();
         
-        if ($payment && $payment->invoice_pdf_url && file_exists(public_path($payment->invoice_pdf_url))) {
-            $attachments[] = \Illuminate\Mail\Mailables\Attachment::fromPath(public_path($payment->invoice_pdf_url))
+        // Double-check file still exists at time of attachment
+        if ($this->hasInvoice && $this->invoicePath && file_exists($this->invoicePath)) {
+            $attachments[] = \Illuminate\Mail\Mailables\Attachment::fromPath($this->invoicePath)
                 ->as('invoice-' . $this->order->order_number . '.pdf')
                 ->withMime('application/pdf');
+        } else if ($this->hasInvoice) {
+            // If file disappeared, update state to maintain subject consistency
+            $this->hasInvoice = false;
         }
         
         return $attachments;

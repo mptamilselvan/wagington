@@ -2,7 +2,7 @@
 namespace App\Services;
 
 use App\Models\SpeciesSizeModel;
-use App\Models\PetSizeLimitModel;
+use App\Models\Room\PetSizeLimitModel;
 use Illuminate\Support\Facades\Storage;
 
 class PetSizeLimitSettingService

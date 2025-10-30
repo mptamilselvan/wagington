@@ -1,20 +1,21 @@
 <?php
 
 namespace App\Livewire\Frontend\Room;
-use App\Services\RoomService;
-use App\Models\RoomModel;
+//use App\Services\RoomService;
+use App\Models\Room\RoomModel;
 use App\Models\Pet;
 use App\Models\Product;
 use Livewire\Component;
 use Illuminate\Support\Facades\Auth;
 use App\Services\ImageService;
-use App\Models\RoomTypeModel;
+use App\Models\Room\RoomTypeModel;
+use App\Services\Frontend\Room\RoomService;
 class PopBook extends Component
 {
     public $room = null;
-    protected ?RoomService $svc = null;
+    protected ?RoomService $roomService = null;
     public $booking = null;
-    
+    public $room_type_id = null;
     // Pet selection properties
     public $pets = [];
     public $selectedPets = [];
@@ -34,11 +35,17 @@ class PopBook extends Component
     public $agreementContent = null;
     public $aggreed_terms = [];
 
-    public function mount()
+    // Date selection
+    public $start_date = null; // Y-m-d
+    public $end_date = null;   // Y-m-d
+
+    public function mount($roomTypeId = null)
     {
+        $this->room_type_id = $roomTypeId;
         $this->booking = [];
         $this->loadPets();
         $this->loadAddons();
+        $this->roomService = new RoomService();
     }
 
     public function refreshBooking()
@@ -182,6 +189,25 @@ class PopBook extends Component
         $this->room = RoomModel::find($roomId);
         if ($this->room) {
             $this->loadAgreements();
+        }
+    }
+
+    public function checkAvailability()
+    {
+        if (!$this->room_type_id) {
+            $this->dispatch('notify', message: 'Room type is not selected', type: 'error');
+            return;
+        }
+        $this->validate([
+            'start_date' => 'required|date',
+            'end_date' => 'required|date|after_or_equal:start_date',
+        ]);
+        $isAvailable = $this->roomService->checkRoomAvailability($this->room_type_id, $this->start_date, $this->end_date);
+        if (!$isAvailable) {
+            $this->dispatch('notify', message: 'Room is not available for the selected dates', type: 'error');
+            return;
+        }else{
+            $this->dispatch('notify', message: 'Room is available for the selected dates', type: 'success');
         }
     }
     public function render()

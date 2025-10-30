@@ -29,6 +29,9 @@ class ProductShow extends Component
     // Addons UI state
     public array $selectedAddons = []; // keyed by addon product id => ['product_id'=>..,'variant_id'=>..,'qty'=>1,'is_required'=>bool,'name'=>..,'variant_name'=>..,'sku'=>..,'unit_price'=>..,'subtotal'=>..]
 
+    // Error state
+    public ?string $errorMessage = null;
+
     public function mount(string $slug, ECommerceService $svc)
     {
         $this->slug = $slug;
@@ -40,17 +43,18 @@ class ProductShow extends Component
         foreach (($this->product['addons'] ?? []) as $ad) {
             $pid = $ad['id'];
             $variant = $ad['variant'] ?? null;
+            $isRequired = (bool)($ad['is_required'] ?? false);
             $this->selectedAddons[$pid] = [
                 'product_id' => $pid,
                 'variant_id' => $variant['id'] ?? null,
                 'qty' => 1,
-                'is_required' => (bool)($ad['is_required'] ?? false),
+                'is_required' => $isRequired,
                 'name' => $ad['name'] ?? 'Addon',
                 'variant_name' => $variant['name'] ?? null,
                 'sku' => $variant['sku'] ?? null,
                 'unit_price' => (float)($variant['price'] ?? 0),
                 'subtotal' => (float)($variant['price'] ?? 0) * 1,
-                'selected' => true, // optional can be toggled off in UI
+                'selected' => $isRequired, // required addons selected by default, optional addons not selected
             ];
         }
 
@@ -189,9 +193,29 @@ class ProductShow extends Component
                 'subtotal' => (float)($row['subtotal'] ?? 0),
             ];
         }
-        $svc->addToCart($this->selectedVariantId, max(1, (int)$this->qty), $addons);
-        // Show mini cart for feedback; badge updates via session
-        $this->dispatch('cart-updated');
+        
+        try {
+            $svc->addToCart($this->selectedVariantId, max(1, (int)$this->qty), $addons);
+            // Clear any previous error
+            $this->errorMessage = null;
+            // Show mini cart for feedback; badge updates via session
+            $this->dispatch('cart-updated');
+        } catch (\App\Exceptions\CartException $e) {
+            // Handle expected cart-related errors with user-friendly messages
+            $this->errorMessage = $e->getMessage();
+            $this->dispatch('cart-error', ['message' => $e->getMessage()]);
+        } catch (\Throwable $e) {
+            // Log unexpected errors and show generic message
+            \Illuminate\Support\Facades\Log::error('Failed to add item to cart', [
+                'error' => $e->getMessage(),
+                'trace' => $e->getTraceAsString(),
+                'variant_id' => $this->selectedVariantId,
+                'qty' => $this->qty,
+                'addons' => $addons
+            ]);
+            $this->errorMessage = 'Unable to add item to cart. Please try again.';
+            $this->dispatch('cart-error', ['message' => $this->errorMessage]);
+        }
     }
 
     public function switchTab(string $tab)

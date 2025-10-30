@@ -3,7 +3,7 @@
 namespace App\Livewire\Frontend\Room;
 
 use Livewire\Component;
-use App\Services\RoomService;
+use App\Services\Frontend\Room\RoomService;
 use App\Models\Species;
 
 class Landing extends Component
@@ -18,11 +18,11 @@ class Landing extends Component
     public $roomTypesData = [];
     public $lastUpdated = null;
     public $forceUpdate = 0;
-    protected RoomService $svc;
-    public function mount(RoomService $svc)
+    protected ?RoomService $roomService = null;
+    public function mount()
     {
-        $this->svc = $svc;
-        $roomTypes = $svc->getLandingRoomTypes(species_id: $this->selectedSpecies);
+        $this->roomService = new RoomService();
+        $roomTypes = $this->roomService->getLandingRoomTypes(species_id: $this->selectedSpecies);
         $this->roomTypesData = $roomTypes;
         $this->species = Species::orderBy('name')->pluck('name', 'id');
     }
@@ -92,13 +92,14 @@ class Landing extends Component
         //]);
     }
 
-    public function updatedSelectedSpecies(RoomService $svc): void
+    public function updatedSelectedSpecies(): void
     {
         $this->forceUpdate++;
         
         // Manually update the room types property
         $speciesId = $this->selectedSpecies === '' ? null : $this->selectedSpecies;
-        $roomTypes = $svc->getLandingRoomTypes(species_id: $speciesId, q: $this->q);
+        $this->ensureService();
+        $roomTypes = $this->roomService->getLandingRoomTypes(species_id: $speciesId, q: $this->q);
         $this->roomTypesData = $roomTypes;
         
         \Log::info('selectedSpecies updated', [
@@ -108,12 +109,13 @@ class Landing extends Component
         ]);
     }
 
-    public function getRoomTypesProperty(RoomService $svc)
+    public function getRoomTypesProperty()
     {
         \Log::info('getRoomTypesProperty called', [
             'selectedSpecies' => $this->selectedSpecies
         ]);
-        $roomTypes = $svc->getLandingRoomTypes(species_id: $this->selectedSpecies);
+        $this->ensureService();
+        $roomTypes = $this->roomService->getLandingRoomTypes(species_id: $this->selectedSpecies);
         \Log::info('computed roomTypes', [
             'count' => $roomTypes->count(),
             'roomTypes' => $roomTypes->pluck('name', 'id')->toArray()
@@ -121,9 +123,10 @@ class Landing extends Component
         return $roomTypes;
     }
 
-    public function render(RoomService $svc)
+    public function render()
     {
-        $roomTypes = $svc->getLandingRoomTypes(species_id: $this->selectedSpecies);
+        $this->ensureService();
+        $roomTypes = $this->roomService->getLandingRoomTypes(species_id: $this->selectedSpecies);
         \Log::info('render called', [
             'selectedSpecies' => $this->selectedSpecies,
             'roomTypesCount' => $roomTypes->count()
@@ -131,5 +134,12 @@ class Landing extends Component
         return view('livewire.frontend.room.landing', [
             'roomTypes' => $roomTypes
         ]);
+    }
+
+    private function ensureService(): void
+    {
+        if ($this->roomService === null) {
+            $this->roomService = new RoomService();
+        }
     }
 }

@@ -49,7 +49,7 @@
                       Success! Your Order <strong>#{{ $order->order_number }}</strong> is Confirmed!
                     </p>
 
-                    @if($order->shipping_address_id && $order->shipping_amount > 0)
+                    @if($order->shipping_address_id && $order->shipping_amount > 0 && $order->shippingAddress)
                     <p style="margin:0 0 20px;color:#333333;font-size:16px;line-height:1.6;">
                       Thank you for your purchase. Your order is being prepared for shipment. We'll send a separate email with tracking information shortly.
                     </p>
@@ -69,7 +69,7 @@
             if (!isset($taxRate)) {
               if (!empty($order->applied_tax_rate)) {
                 $taxRate = (float) $order->applied_tax_rate;
-              } elseif (!empty($order->subtotal) && (float)$order->subtotal > 0) {
+              } elseif (!empty($order->subtotal) && (float)$order->subtotal > 0 && isset($order->tax_amount)) {
                 $taxRate = ($order->tax_amount / $order->subtotal) * 100;
               } else {
                 $taxRate = (float) config('app.default_tax_rate', 0.0);

@@ -51,8 +51,12 @@ class InvoiceController extends Controller
                 // Try with timestamp suffix if the base filename doesn't exist
                 $files = Storage::disk($disk)->files('invoices');
                 $matchingFile = null;
+                $escapedInvoiceNumber = preg_quote($payment->invoice_number, '/');
+                $pattern = '/^' . $escapedInvoiceNumber . '(?:[^A-Za-z0-9]|\.pdf)/';
+                
                 foreach ($files as $file) {
-                    if (strpos($file, $payment->invoice_number) === 0) {
+                    $basename = basename($file);
+                    if (preg_match($pattern, $basename)) {
                         $matchingFile = $file;
                         break;
                     }

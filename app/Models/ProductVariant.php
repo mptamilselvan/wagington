@@ -116,20 +116,42 @@ class ProductVariant extends Model
     // Helper methods
     public function getPrimaryImage()
     {
-        // First try variant-specific primary image
-        $variantPrimary = $this->variantImages()->primary()->first();
-        if ($variantPrimary) {
-            return $variantPrimary;
-        }
-
-        // Then try option primary image
+        // First try option primary image (this is the image uploaded in the variant options table)
         $optionPrimary = $this->optionImages()->primary()->first();
         if ($optionPrimary) {
             return $optionPrimary;
         }
 
-        // Fallback to any primary image
-        return $this->mediaAssets()->where('is_primary', true)->first();
+        // Then try variant-specific primary image
+        $variantPrimary = $this->variantImages()->primary()->first();
+        if ($variantPrimary) {
+            return $variantPrimary;
+        }
+
+        // Fallback to any primary image attached to this variant
+        $anyPrimary = $this->mediaAssets()->where('is_primary', true)->first();
+        if ($anyPrimary) {
+            return $anyPrimary;
+        }
+
+        // If no explicit primary is set on variant/option, pick the first available
+        // image based on display_order (prefer option image, then variant image).
+        $firstOptionImage = $this->optionImages()->first();
+        if ($firstOptionImage) {
+            return $firstOptionImage;
+        }
+        $firstVariantImage = $this->variantImages()->first();
+        if ($firstVariantImage) {
+            return $firstVariantImage;
+        }
+
+        // Final fallback: use product-level primary image for variant-type products
+        // This covers cases where a non-primary variant has no own primary image.
+        if ($this->product && $this->product->product_type === 'variant') {
+            return $this->product->getPrimaryImage();
+        }
+
+        return null;
     }
 
     public function getAllImages()
@@ -139,12 +161,39 @@ class ProductVariant extends Model
 
     public function getDisplayImages()
     {
-        // Get general images from product + variant-specific images
+        // For regular/addon products, get all images from variant media assets
+        if ($this->product && ($this->product->product_type === 'regular' || $this->product->product_type === 'addon')) {
+            return $this->mediaAssets()->images()->ordered()->get();
+        }
+        
+        // For variant products, get general images from product + variant-specific images
         $generalImages = $this->product->generalImages;
         $variantImages = $this->variantImages;
         $optionImages = $this->optionImages;
 
-        // Combine and sort by display order
+        // If this is the primary variant, prioritize its images
+        if ($this->is_primary) {
+            // Get the primary image for this variant (should be from option images)
+            $primaryImage = $this->getPrimaryImage();
+            
+            // Combine all images
+            $allImages = $generalImages->concat($variantImages)->concat($optionImages)->sortBy('display_order');
+            
+            // If we have a primary image, make sure it's first
+            if ($primaryImage) {
+                // Remove the primary image from the collection if it exists
+                $allImages = $allImages->filter(function ($image) use ($primaryImage) {
+                    return $image->id !== $primaryImage->id;
+                });
+                
+                // Prepend the primary image to the beginning
+                $allImages = collect([$primaryImage])->merge($allImages);
+            }
+            
+            return $allImages;
+        }
+        
+        // For non-primary variants, combine and sort by display order
         return $generalImages->concat($variantImages)->concat($optionImages)->sortBy('display_order');
     }
 

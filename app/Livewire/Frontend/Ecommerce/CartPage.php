@@ -52,7 +52,6 @@ class CartPage extends Component
         } catch (\Throwable $e) {
             \Log::error('Coupon validation failed', [
                 'code' => $code,
-                'user_id' => $userId,
                 'error' => $e->getMessage()
             ]);
             $this->couponMessage = 'Invalid coupon code';
@@ -71,17 +70,16 @@ class CartPage extends Component
             return;
         }
 
-        // Add the coupon to applied coupons
+        // Store only voucher metadata, not calculated values
         $this->appliedCoupons[] = [
             'voucher_code' => $code,
-            'calculated_discount' => $result['discount'],
             'discount_type' => $result['discount_type'] ?? 'fixed',
-            'discount_value' => $result['discount_value'] ?? $result['discount'],
+            'discount_value' => $result['discount_value'] ?? 0,
         ];
 
-        // Recompute stored total discount
-        $this->totalDiscount = $this->calculateTotalDiscount();
-
+        // Recalculate discounts against current cart
+        $this->recalculateDiscounts($voucherService);
+        
         $appliedCouponsCount = count($this->appliedCoupons);
 
         // Set success message
@@ -137,12 +135,12 @@ class CartPage extends Component
         }
         $this->cart['items'] = $items;
 
-        // Ensure totalDiscount is computed
-        $totalDiscount = $this->calculateTotalDiscount();
+        // Recalculate discounts if we have any vouchers
+        if (!empty($this->appliedCoupons)) {
+            $this->recalculateDiscounts(app(VoucherService::class));
+        }
 
-        $this->totalDiscount = $totalDiscount;
-
-        $computed = max(0.0, round($total - $totalDiscount, 2));
+        $computed = max(0.0, round($total - $this->totalDiscount, 2));
         $this->cart['total'] = $computed;
         // Persist the full cart so other components and requests see updated items and totals.
         // Also keep the legacy cart.total key for backward compatibility.
@@ -150,49 +148,62 @@ class CartPage extends Component
         Session::put('cart.total', $computed);
     }
 
-    public function increment(string $id)
-    {
-        if (!is_array($this->cart) || !array_key_exists('items', $this->cart)) {
-            return;
-        }
-
-        $items = $this->cart['items'];
-        if (!is_iterable($items) || collect($items)->isEmpty()) {
-            return;
-        }
-
-        $idx = collect($this->cart['items'])->search(fn($it) => $it['id'] === $id);
-        if ($idx === false) return;
-        $this->cart['items'][$idx]['qty'] = (int)$this->cart['items'][$idx]['qty'] + 1;
-        $this->recalcTotals();
-    }
-
-    public function decrement(string $id)
-    {
-        // Guard: ensure items exist and are iterable
-        if (!is_array($this->cart) || !isset($this->cart['items']) || !is_array($this->cart['items']) || empty($this->cart['items'])) {
-            return;
-        }
-
-        $idx = collect($this->cart['items'])->search(fn($it) => $it['id'] === $id);
-        if ($idx === false) return;
-        $this->cart['items'][$idx]['qty'] = max(1, (int)$this->cart['items'][$idx]['qty'] - 1);
-        $this->recalcTotals();
-    }
-
     public function remove(string $id, ECommerceService $svc)
     {
         $this->cart = $svc->removeCartItem($id);
     }
 
-    public function saveAndProceed(ECommerceService $svc)
+    public function saveAndProceed(ECommerceService $svc, VoucherService $voucherService)
     {
+        // Revalidate discounts before proceeding
+        $this->recalculateDiscounts($voucherService);
+
         // Persist all current quantities, then go to checkout
         foreach (($this->cart['items'] ?? []) as $it) {
             $svc->updateCartItem($it['id'], (int)$it['qty']);
         }
+
+        // Refresh the cart data after updates
         $this->cart = $svc->getCart();
+
+        // Store validated voucher codes for checkout
+        $voucherCodes = collect($this->appliedCoupons)
+            ->pluck('voucher_code')
+            ->filter()
+            ->values()
+            ->all();
+            
+        // Store voucher codes in session for checkout
+        Session::put('checkout.coupon_codes', $voucherCodes);
+
         return redirect()->route('shop.checkout');
+    }
+
+    /**
+     * Recalculate all applied voucher discounts against current cart
+     */
+    private function recalculateDiscounts(VoucherService $voucherService): void
+    {
+        $userId = Auth::id();
+        $totalDiscount = 0.0;
+
+        // Revalidate each voucher against current cart state
+        foreach ($this->appliedCoupons as &$coupon) {
+            try {
+                $result = $voucherService->validateVoucher($coupon['voucher_code'], $userId);
+                if ($result['valid']) {
+                    $totalDiscount += (float)($result['discount'] ?? 0);
+                    // Update metadata but don't store calculated values
+                    $coupon['discount_type'] = $result['discount_type'] ?? 'fixed';
+                    $coupon['discount_value'] = $result['discount_value'] ?? 0;
+                }
+            } catch (\Throwable $e) {
+                // Voucher became invalid - skip it
+                continue;
+            }
+        }
+
+        $this->totalDiscount = $totalDiscount;
     }
 
     /**
@@ -200,9 +211,25 @@ class CartPage extends Component
      */
     private function calculateTotalDiscount(): float
     {
-        return array_sum(array_map(function($c) {
-            return (float)($c['calculated_discount'] ?? $c['applied_amount'] ?? 0);
-        }, $this->appliedCoupons));
+        // This should only be called after recalculateDiscounts()
+        return $this->totalDiscount;
+    }
+
+    /**
+     * Check if there are any quantity errors in the cart
+     */
+    public function hasQuantityErrors(): bool
+    {
+        foreach (($this->cart['items'] ?? []) as $item) {
+            $maxQtyPerOrder = (int)($item['max_quantity_per_order'] ?? 0);
+            $currentQty = (int)($item['qty'] ?? 0);
+            
+            if ($maxQtyPerOrder > 0 && $currentQty > $maxQtyPerOrder) {
+                return true;
+            }
+        }
+        
+        return false;
     }
 
     public function render()

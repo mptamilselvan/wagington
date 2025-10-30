@@ -10,7 +10,7 @@ class OrderItem extends Model
     use HasFactory;
 
     protected $fillable = [
-        'order_id','product_id','variant_id','product_name','variant_display_name','sku','product_attributes','quantity','reserved_quantity','fulfilled_quantity','unit_price','total_price'
+        'order_id','product_id','variant_id','product_name','variant_display_name','sku','product_attributes','quantity','reserved_quantity','fulfilled_quantity','fulfillment_status','unit_price','total_price'
     ];
 
     protected $casts = [
@@ -30,5 +30,29 @@ class OrderItem extends Model
     public function addons()
     {
         return $this->hasMany(OrderAddon::class);
+    }
+
+    // Helper methods for fulfillment
+    public function isShippable()
+    {
+        return $this->fulfillment_status !== 'awaiting_handover';
+    }
+
+    public function isFulfilled()
+    {
+        return in_array($this->fulfillment_status, ['delivered', 'handed_over']);
+    }
+
+    public function getFulfillmentProgress()
+    {
+        if ($this->fulfillment_status === 'handed_over') {
+            return 100; // Digital items are fully fulfilled when handed over
+        }
+        
+        if ($this->quantity == 0) {
+            return 0;
+        }
+        
+        return round(($this->fulfilled_quantity / $this->quantity) * 100, 2);
     }
 }

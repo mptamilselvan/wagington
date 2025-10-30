@@ -254,9 +254,14 @@
                         </div>
                     </div>
                     
+                    @php
+                        // Safely compute invoice availability once
+                        $payment = $order && $order->payments->isNotEmpty() ? $order->payments->first() : null;
+                        $hasInvoice = $payment && !empty($payment->invoice_url);
+                    @endphp
+
                     <!-- Invoice Information for Mobile -->
-                    @if($order && $order->payments->first() && $order->payments->first()->invoice_url)
-                        @php $payment = $order->payments->first(); @endphp
+                    @if($hasInvoice)
                         <x-ecommerce.invoice-section :payment="$payment" :order="$order" wrapperClass="mt-6 pt-6 border-t border-gray-200 lg:hidden" />
                     @endif
                 </div>
@@ -266,8 +271,7 @@
                     <x-ecommerce.order-actions :order="$order" :taxRate="$taxRate" />
                     
                     <!-- Invoice Information -->
-                    @if($order && $order->payments->first() && $order->payments->first()->invoice_url)
-                        @php $payment = $order->payments->first(); @endphp
+                    @if($hasInvoice)
                         <x-ecommerce.invoice-section :payment="$payment" :order="$order" wrapperClass="mt-6 bg-white border border-gray-200 rounded-xl shadow-sm overflow-hidden" />
                     @endif
                 </div>

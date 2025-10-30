@@ -72,7 +72,10 @@
     @props([
         'subMenu' => [
             ['key' => 'pet-size-limit-settings', 'value' => 'Pet Size Limit Settings', 'route' => route('pet-size-limit-settings')],
-            ['key' => 'cancel-setting', 'value' => 'Cancellation & Refund Settings', 'route' => route('cancel-setting')],
+            ['key' => 'room-peak-seasons', 'value' => 'Room Peak Seasons', 'route' => route('room-peak-seasons')],
+            ['key' => 'room-off-days', 'value' => 'Room Off Days', 'route' => route('room-off-days')],
+            ['key' => 'room-price-options', 'value' => 'Room Price Options', 'route' => route('room-price-options')],
+            ['key' => 'room-cancel-setting', 'value' => 'Room Cancel Setting', 'route' => route('room-cancel-setting')],
         ],
         'active' => $active ?? 'pet-size-limit-settings',
     ])

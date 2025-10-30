@@ -210,11 +210,31 @@
                             @php 
                                 $maxQty = 10; // default value
                                 if ($sel) {
-                                    $maxQty = max(1, (int)($sel['allow_backorders'] ? ($sel['max_quantity_per_order'] ?? 10) : ($sel['available'] ?? 0)));
+                                    // Get the max quantity per order setting (if set)
+                                    $maxQtyPerOrder = (int)($sel['max_quantity_per_order'] ?? 0);
+                                    
+                                    // If max_quantity_per_order is set and greater than 0, use it as the primary limit
+                                    if ($maxQtyPerOrder > 0) {
+                                        // If backorders are allowed, we can go up to max_quantity_per_order
+                                        if ($sel['allow_backorders']) {
+                                            $maxQty = $maxQtyPerOrder;
+                                        } else {
+                                            // If backorders are not allowed, we're limited by the lesser of:
+                                            // 1. max_quantity_per_order
+                                            // 2. available stock
+                                            $available = (int)($sel['available'] ?? 0);
+                                            $maxQty = min($maxQtyPerOrder, $available);
+                                            // Ensure we have at least 1 if we have any available stock
+                                            $maxQty = max(1, $maxQty);
+                                        }
+                                    } else {
+                                        // No max_quantity_per_order set, use original logic
+                                        $maxQty = max(1, (int)($sel['allow_backorders'] ? 10 : ($sel['available'] ?? 0)));
+                                    }
                                 }
                             @endphp
                             <!-- Use live binding so availability/backorder hint updates while typing -->
-                            <input type="number" min="1" max="{{ $maxQty }}" wire:model.live="qty" class="border-0 bg-white rounded-lg px-3 py-1.5 w-16 text-center text-sm font-medium shadow-sm focus:ring-2 focus:ring-blue-500" />
+                            <input type="number" min="1" max="{{ $maxQty }}" wire:model.live="qty" @input="$dispatch('qty-changed')" class="border-0 bg-white rounded-lg px-3 py-1.5 w-16 text-center text-sm font-medium shadow-sm focus:ring-2 focus:ring-blue-500" />
                         </div>
                         @php $subtotal = $exact ? $exact * max(1,(int)$qty) : null; @endphp
                         @if($subtotal)
@@ -223,18 +243,28 @@
                     </div>
                     @php 
                         $canAdd = true; // default to true
+                        $hasQtyError = false; // default to false
                         if ($sel) {
                             $canAdd = !$sel['track_inventory'] || ($sel['available'] ?? 0) > 0 || ($sel['allow_backorders'] ?? false);
+                            // Check if there's a quantity error
+                            $requested = max(1, (int)($qty ?? 1));
+                            $maxQtyPerOrder = (int)($sel['max_quantity_per_order'] ?? 0);
+                            $hasQtyError = $maxQtyPerOrder > 0 && $requested > $maxQtyPerOrder;
                         }
+                        // Also disable button if there's a component error
+                        $hasComponentError = !empty($errorMessage);
                     @endphp
-                    <button wire:click="addToCart" @disabled(!$canAdd) class="px-8 py-2.5 rounded-lg font-semibold text-sm transition-all
-                            {{ $canAdd ? 'bg-white border-2 shadow-md hover:shadow-lg' : 'bg-gray-200 text-gray-400 cursor-not-allowed' }}"
-                            style="{{ $canAdd ? 'color: #1B85F3; border-color: #1B85F3;' : '' }}">
+                    <button wire:click="addToCart" @disabled(!$canAdd || $hasQtyError || $hasComponentError) class="px-8 py-2.5 rounded-lg font-semibold text-sm transition-all
+                            {{ ($canAdd && !$hasQtyError && !$hasComponentError) ? 'bg-white border-2 shadow-md hover:shadow-lg' : 'bg-gray-200 text-gray-400 cursor-not-allowed' }}"
+                            style="{{ ($canAdd && !$hasQtyError && !$hasComponentError) ? 'color: #1B85F3; border-color: #1B85F3;' : '' }}">
                         Add to cart
                     </button>
                 </div>
                 @if($sel && !$canAdd && !($sel['allow_backorders'] ?? false))
                     <div class="text-xs text-red-600 mt-2">Out of stock</div>
+                @endif
+                @if (!empty($errorMessage))
+                    <div class="text-xs text-red-600 mt-2 font-medium">{{ $errorMessage }}</div>
                 @endif
             </div>
             {{-- Live availability/backorder hint for typed qty --}}
@@ -242,13 +272,17 @@
                 $avail = 0; // default value
                 $requested = max(1, (int)($qty ?? 1));
                 $allowBO = false; // default value
+                $maxQtyPerOrder = 0; // default value
                 if ($sel) {
                     $avail = (int)($sel['available'] ?? 0);
                     $allowBO = (bool)($sel['allow_backorders'] ?? false);
+                    $maxQtyPerOrder = (int)($sel['max_quantity_per_order'] ?? 0);
                 }
             @endphp
-            @if($sel && !empty($sel['track_inventory']))
-                <div class="mt-1 text-xs">
+            @if($sel)
+                @if($maxQtyPerOrder > 0 && $requested > $maxQtyPerOrder)
+                    <div class="text-xs text-red-600 mt-1 font-medium">Maximum quantity allowed per order is {{ $maxQtyPerOrder }}</div>
+                @elseif(!empty($sel['track_inventory']))
                     @if($allowBO)
                         @php $res = max(0, min($requested, $avail)); $bo = max(0, $requested - $res); @endphp
                         @if($bo > 0)
@@ -271,10 +305,17 @@
                             @endif
                         @endif
                     @endif
-                </div>
+                @endif
             @endif
-            <div x-data="{ open:false }" x-on:cart-updated.window="open=true; setTimeout(()=>open=false, 1800)">
-                <div x-show="open" class="fixed bottom-6 right-6 bg-green-600 text-white px-4 py-2 rounded shadow">Added to cart</div>
+            <div x-data="{ open:false, errorMessage: '' }" 
+                 x-on:cart-updated.window="open=true; setTimeout(()=>open=false, 1800)"
+                 x-on:cart-error.window="errorMessage = $event.detail.message; open=true; setTimeout(()=>open=false, 5000)"
+                 x-on:qty-changed.window="errorMessage = ''; @this.errorMessage = ''">
+                <div x-show="open" class="fixed bottom-6 right-6 bg-green-600 text-white px-4 py-2 rounded shadow" x-cloak>Added to cart</div>
+                <div x-show="errorMessage" class="fixed bottom-6 right-6 bg-red-600 text-white px-4 py-2 rounded shadow" x-cloak>
+                    <span x-text="errorMessage"></span>
+                    <button @click="errorMessage = ''" class="ml-2 text-white hover:text-gray-200">×</button>
+                </div>
             </div>
 
 
@@ -284,7 +325,7 @@
                 <div class="flex gap-6 border-b">
                     <button type="button" wire:click="switchTab('features')" class="py-2 {{ $activeTab==='features' ? 'border-b-2 border-yellow-400 font-medium' : 'text-gray-500' }}">Features</button>
                     <button type="button" wire:click="switchTab('description')" class="py-2 {{ $activeTab==='description' ? 'border-b-2 border-yellow-400 font-medium' : 'text-gray-500' }}">Description</button>
-                    <button type="button" wire:click="switchTab('info')" class="py-2 {{ $activeTab==='info' ? 'border-b-2 border-yellow-400 font-medium' : 'text-gray-500' }}">Additional Info</button>
+                    <!-- <button type="button" wire:click="switchTab('info')" class="py-2 {{ $activeTab==='info' ? 'border-b-2 border-yellow-400 font-medium' : 'text-gray-500' }}">Additional Info</button> -->
                 </div>
                 <div class="py-4 text-sm text-gray-700">
                     @if($activeTab==='features')

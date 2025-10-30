@@ -10,7 +10,7 @@ use Illuminate\Mail\Mailables\Envelope;
 use Illuminate\Queue\SerializesModels;
 use App\Models\Order;
 
-class OrderPaymentFailed extends Mailable
+class OrderPaymentFailed extends Mailable implements ShouldQueue
 {
     use Queueable, SerializesModels;
 
@@ -23,7 +23,8 @@ class OrderPaymentFailed extends Mailable
     public function __construct(Order $order)
     {
         $this->order = $order;
-        $this->user = $order->user;
+        // Allow null user while ensuring a safe default
+        $this->user = $order->user ?? null;
     }
 
     /**
@@ -32,7 +33,7 @@ class OrderPaymentFailed extends Mailable
     public function envelope(): Envelope
     {
         return new Envelope(
-            subject: 'Order Canceled: Payment Failed for Order #' . $this->order->order_number,
+            subject: 'Payment Failed: Order #' . $this->order->order_number . ' — Action Required',
         );
     }
 

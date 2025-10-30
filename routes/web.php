@@ -21,7 +21,6 @@ use App\Livewire\Backend\MedicalHistoryRecord;
 use App\Livewire\Backend\DietaryPreferences;
 use App\Livewire\Backend\MedicationSupplement;
 use App\Livewire\Backend\Species;
-use App\Livewire\Backend\RoomType;
 use App\Livewire\Backend\Breed;
 use App\Livewire\Backend\Vaccination;
 use App\Livewire\Backend\BloodTest;
@@ -33,13 +32,16 @@ use App\Livewire\Frontend\AddPaymentMethod;
 use App\Livewire\Frontend\Ecommerce\Landing as ShopLanding;
 use App\Livewire\Frontend\Ecommerce\Listing as ShopListing;
 use App\Livewire\Frontend\Ecommerce\ProductShow as ShopProductShow;
-use App\Livewire\Backend\CancelSetting;
-use App\Livewire\Backend\Room;
+use App\Livewire\Backend\Room\CancelSetting;
 use App\Livewire\Backend\SpeciesSizeSetting;
-use App\Livewire\Backend\PetSizeLimitSetting;
+use App\Livewire\Backend\Room\PetSizeLimitSetting;
 use App\Livewire\Frontend\Room\Landing as RoomLanding;
 use App\Livewire\Frontend\Room\Details as RoomDetails;
-
+use App\Livewire\Backend\Room\PeakSeason;
+use App\Livewire\Backend\Room\OffDay;
+use App\Livewire\Backend\Room\RoomPriceOption;
+use App\Livewire\Backend\Room\RoomType;
+use App\Livewire\Backend\Room\Room;
 // The welcome page
 Route::get('/', function () {
     // If user is authenticated and has customer role, redirect to dashboard
@@ -215,10 +217,11 @@ Route::namespace('App\Livewire\Backend')->prefix('admin')->middleware(['auth', '
    
     Route::get('/rooms', Room::class)->name('rooms');
     Route::get('/room-types', RoomType::class)->name('room-types');
-    //Route::get('/room-type', [RoomType::class, 'index'])->name('room-type');
-    Route::get('/species-size-settings', [SpeciesSizeSetting::class, 'index'])->name('species-size-settings');
     Route::get('/pet-size-limit-settings', [PetSizeLimitSetting::class, 'index'])->name('pet-size-limit-settings');
-    Route::get('/cancel-setting', [CancelSetting::class, 'index'])->name('cancel-setting');
+    Route::get('/room-peak-seasons', [PeakSeason::class, 'index'])->name('room-peak-seasons');
+    Route::get('/room-off-days', [OffDay::class, 'index'])->name('room-off-days');
+    Route::get('/room-price-options', [RoomPriceOption::class, 'index'])->name('room-price-options');
+    Route::get('/room-cancel-setting', [CancelSetting::class, 'index'])->name('room-cancel-setting');
     Route::get('/system-settings', 'SystemSetting@index')->name('system-settings');
     Route::get('/company-settings', 'CompanySettings@index')->name('company-settings');
     Route::get('/operational-hours', 'OperationalHours@index')->name('operational-hours');

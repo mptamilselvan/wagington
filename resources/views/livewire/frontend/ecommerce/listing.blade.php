@@ -10,10 +10,17 @@
             if (!empty($last['name'])) {
                 $headerTitle = strip_tags($last['name']);
                 if (!empty($last['url'])) {
-                    // Validate URL format before using
-                    $canonicalUrl = filter_var($last['url'], FILTER_VALIDATE_URL) 
-                        ? $last['url'] 
-                        : url($last['url']);
+                    // Handle different URL formats
+                    if (filter_var($last['url'], FILTER_VALIDATE_URL) !== false) {
+                        // Absolute URL - use as is
+                        $canonicalUrl = $last['url'];
+                    } elseif (strlen($last['url']) > 0 && $last['url'][0] === '/') {
+                        // Valid relative path starting with / - convert to absolute
+                        $canonicalUrl = url($last['url']);
+                    } else {
+                        // Invalid or unexpected format - use safe default
+                        $canonicalUrl = route('shop.list');
+                    }
                 }
             }
         }
@@ -32,27 +39,22 @@
     />
 @endsection
 
-<x-ecommerce.page-wrapper heroImage="/images/e-comerce-1.png">
-    <x-slot name="header">
-        <!-- Floating header: show actual category/product group title only -->
-        <div class="flex">
-            <h1 class="text-xl sm:text-2xl font-semibold text-gray-700">{{ $headerTitle }}</h1>
-        </div>
-    </x-slot>
+<div x-data="{ showFilterPanel: @entangle('showFilterPanel') }">
+<x-ecommerce.page-wrapper :breadcrumbs="$filters['breadcrumbs'] ?? []">
     
-    <!-- Breadcrumbs -->
-    @if(!empty($filters['breadcrumbs']))
-        <nav class="text-sm text-gray-500 mb-4"><ol class="flex flex-wrap items-center gap-1">
+    <!-- Breadcrumb -->
+    <nav class="text-sm text-gray-500 mb-6">
+        <ol class="flex flex-wrap items-center gap-1">
             <li><a href="{{ route('shop.list') }}" class="hover:underline">Shop</a></li>
             @foreach($filters['breadcrumbs'] as $bc)
                 <li aria-hidden="true">/</li>
                 <li><a href="{{ $bc['url'] }}" class="hover:underline">{{ $bc['name'] }}</a></li>
             @endforeach
-        </ol></nav>
-    @endif
+        </ol>
+    </nav>
 
     <!-- Toolbar: count (left) + search/filter (right) in one line above grid -->
-    <div class="mt-10 sm:mt-12 mb-4 flex flex-col md:flex-row md:items-center md:justify-between gap-3">
+    <div class="mb-4 flex flex-col md:flex-row md:items-center md:justify-between gap-3">
         <div class="text-sm text-gray-600">
             @if(method_exists($products, 'total'))
                 Showing {{ number_format($products->total()) }} Products
@@ -65,50 +67,54 @@
                 </span>
                 <input type="text" wire:model.live.debounce.400ms="q" placeholder="Search" class="w-full rounded-xl border border-gray-200 bg-white pl-9 pr-3 py-2.5 text-sm focus:outline-none focus:ring-2 focus:ring-blue-500" />
             </div>
-            <button type="button" onclick="window.dispatchEvent(new CustomEvent('open-filter'))" class="inline-flex items-center gap-2 px-4 py-2.5 rounded-xl bg-white border border-gray-200 text-gray-700 hover:bg-gray-50 shadow-sm">
+            <button 
+                type="button" 
+                @click="showFilterPanel = !showFilterPanel"
+                class="inline-flex items-center gap-2 px-4 py-2.5 rounded-xl bg-white border border-gray-200 text-gray-700 hover:bg-gray-50 shadow-sm"
+            >
                 <span>Filter</span>
             </button>
         </div>
     </div>
 
-    <!-- Slide-over Filter Panel (Alpine) -->
-    <div x-data="{ open: false }" @open-filter.window="open=true" @keydown.escape.window="open=false" x-cloak>
+    <div x-show="showFilterPanel" x-cloak style="display: none;">
         <!-- Overlay -->
-        <div x-show="open" class="fixed inset-0 z-40" aria-hidden="true">
-            <div class="absolute inset-0 bg-black/50 backdrop-blur-sm" @click="open=false"></div>
+        <div class="fixed inset-0 z-40" aria-hidden="true">
+            <div class="absolute inset-0 bg-black/50 backdrop-blur-sm" @click="showFilterPanel = false"></div>
         </div>
         <!-- Panel -->
-        <div x-show="open" class="fixed inset-y-0 right-0 max-w-full flex z-50">
+        <div class="fixed inset-y-0 right-0 max-w-full flex z-50">
             <div class="w-screen max-w-md bg-white shadow-2xl flex flex-col rounded-l-2xl">
                 <div class="flex items-center justify-between p-5 border-b">
                     <h2 class="text-lg font-semibold">Filter</h2>
-                    <button @click="open=false" class="h-8 w-8 inline-flex items-center justify-center rounded-full border border-gray-200 text-gray-600 hover:bg-gray-50">✕</button>
+                    <button type="button" @click="showFilterPanel = false" class="h-8 w-8 inline-flex items-center justify-center rounded-full border border-gray-200 text-gray-600 hover:bg-gray-50">✕</button>
                 </div>
-                <div class="p-5 overflow-y-auto flex-1">
-                    <button wire:click="clearFilters" class="text-sm text-gray-600 hover:underline mb-4">Reset</button>
+                <!-- Main scrollable content -->
+                <div class="overflow-y-auto flex-1">
+                    <div class="p-5">
+                        <button type="button" wire:click="clearFilters" class="text-sm text-gray-600 hover:underline mb-4">Reset</button>
 
-                    <!-- Sort -->
-                    <div class="mb-6">
-                        <label class="block text-sm font-medium mb-1">Sort</label>
-                        <select wire:model="sort" class="w-full rounded-xl border border-gray-200 px-3 py-2.5 bg-white focus:outline-none focus:ring-2 focus:ring-blue-500">
-                            @foreach(($filters['sort'] ?? []) as $s)
-                                <option value="{{ $s['key'] }}">{{ $s['label'] }}</option>
-                            @endforeach
-                        </select>
-                    </div>
-
+                        <!-- Sort -->
+                        <div class="mb-6">
+                            <label class="block text-sm font-medium mb-1">Sort</label>
+                            <select wire:model.live="sort" class="w-full rounded-xl border border-gray-200 px-3 py-2.5 bg-white focus:outline-none focus:ring-2 focus:ring-blue-500">
+                                @foreach(($filters['sort'] ?? []) as $s)
+                                    <option value="{{ $s['key'] }}">{{ $s['label'] }}</option>
+                                @endforeach
+                            </select>
+                        </div>
                     <!-- Category (hidden if category_id present in route) -->
                     @if(!$category_id)
                     <div class="mb-6">
                         <div class="text-sm font-medium mb-2">Categories</div>
                         <div class="max-h-60 overflow-auto space-y-2 pr-1">
-                            <label class="flex items-center gap-2 text-sm">
-                                <input type="radio" name="category_id" wire:model.live="category_id" value="" class="rounded border-gray-300 text-blue-600 focus:ring-blue-500" />
+                            <label class="flex items-center gap-2 text-sm cursor-pointer">
+                                <input type="radio" wire:model.live="category_id" value="" class="text-blue-600 focus:ring-blue-500" />
                                 <span>All</span>
                             </label>
                             @foreach(($filters['categories'] ?? []) as $cat)
-                                <label class="flex items-center gap-2 text-sm">
-                                    <input type="radio" name="category_id" wire:model.live="category_id" value="{{ $cat['id'] }}" class="rounded border-gray-300 text-blue-600 focus:ring-blue-500" />
+                                <label class="flex items-center gap-2 text-sm cursor-pointer">
+                                    <input type="radio" wire:model.live="category_id" value="{{ $cat['id'] }}" class="text-blue-600 focus:ring-blue-500" />
                                     <span>{{ $cat['name'] }}</span>
                                 </label>
                             @endforeach
@@ -120,8 +126,8 @@
                     <div class="mb-6">
                         <div class="text-sm font-medium mb-2">Price</div>
                         <div class="flex gap-2">
-                            <input type="number" step="0.01" inputmode="decimal" autocomplete="off" wire:model.live.debounce.600ms="price_min" placeholder="Min" class="w-full rounded-xl border border-gray-200 px-3 py-2 focus:outline-none focus:ring-2 focus:ring-blue-500" />
-                            <input type="number" step="0.01" inputmode="decimal" autocomplete="off" wire:model.live.debounce.600ms="price_max" placeholder="Max" class="w-full rounded-xl border border-gray-200 px-3 py-2 focus:outline-none focus:ring-2 focus:ring-blue-500" />
+                            <input type="number" step="0.01" inputmode="decimal" autocomplete="off" wire:model.live.debounce.500ms="price_min" placeholder="Min" class="w-full rounded-xl border border-gray-200 px-3 py-2 focus:outline-none focus:ring-2 focus:ring-blue-500" />
+                            <input type="number" step="0.01" inputmode="decimal" autocomplete="off" wire:model.live.debounce.500ms="price_max" placeholder="Max" class="w-full rounded-xl border border-gray-200 px-3 py-2 focus:outline-none focus:ring-2 focus:ring-blue-500" />
                         </div>
                         @if(isset($filters['price']))
                             <div class="text-xs text-gray-500 mt-1">
@@ -133,13 +139,14 @@
                     <div class="mb-6">
                         <div class="text-sm font-medium mb-2">Shipping</div>
                         <div class="space-y-2">
-                            <label class="flex items-center gap-2 text-sm">
-                                <input type="radio" name="shippable" wire:model.live="shippable" value="" class="rounded border-gray-300 text-blue-600 focus:ring-blue-500" />
-                                <span>All</span>
-                            </label>
                             @foreach(($filters['shipping_filter'] ?? []) as $shipOption)
-                                <label class="flex items-center gap-2 text-sm" wire:key="ship-{{ $shipOption['key'] }}">
-                                    <input type="radio" name="shippable" wire:model.live="shippable" value="{{ $shipOption['key'] }}" class="rounded border-gray-300 text-blue-600 focus:ring-blue-500" />
+                                <label class="flex items-center gap-2 text-sm cursor-pointer">
+                                    <input 
+                                        type="radio" 
+                                        wire:model.live="shippable"
+                                        value="{{ $shipOption['key'] }}" 
+                                        class="text-blue-600 focus:ring-blue-500" 
+                                    />
                                     <span>{{ $shipOption['label'] }}</span>
                                 </label>
                             @endforeach
@@ -147,16 +154,36 @@
                     </div>
 
                     <!-- Dynamic Variant Attributes -->
-                    
                     @if(isset($filters['attributes']) && count($filters['attributes']) > 0)
                         @foreach($filters['attributes'] as $group)
                             @if(isset($group['values']) && count($group['values']) > 0)
                                 <div class="mb-6">
                                     <div class="text-sm font-medium mb-2">{{ $group['name'] }}</div>
-                                    <div class="grid grid-cols-1 gap-2 max-h-56 overflow-auto pr-1">
+                                    <div class="space-y-2">
                                         @foreach($group['values'] as $val)
-                                            <label class="flex items-center gap-2 text-sm" wire:key="attr-{{ md5($group['name'].'|'.$val) }}">
-                                                <input type="checkbox" wire:model.live="attrs.{{ $group['name'] }}" value="{{ $val }}" class="rounded border-gray-300 text-blue-600 focus:ring-blue-500" />
+                                            <label class="flex items-center gap-2 text-sm cursor-pointer">
+                                                <input 
+                                                    type="checkbox" 
+                                                    value="{{ $val }}"
+                                                    @if(is_array($attrs[$group['name']] ?? null) && in_array($val, $attrs[$group['name']])) checked @endif
+                                                    @php
+                                                    $groupName = $group['name'];
+                                                    $attributeValue = $val;
+                                                @endphp
+                                                @change="
+                                                        let current = $wire.get('attrs.' + @js($groupName)) || [];
+                                                        let value = @js($attributeValue);
+                                                        if ($event.target.checked) {
+                                                            if (!current.includes(value)) {
+                                                                current.push(value);
+                                                            }
+                                                        } else {
+                                                            current = current.filter(v => v === value ? false : true);
+                                                        }
+                                                        $wire.set('attrs.' + @js($groupName), current);
+                                                    "
+                                                    class="rounded text-blue-600 focus:ring-blue-500" 
+                                                />
                                                 <span>{{ $val }}</span>
                                             </label>
                                         @endforeach
@@ -165,10 +192,14 @@
                             @endif
                         @endforeach
                     @endif
+                    </div>
                 </div>
-                <div class="p-5 border-t flex justify-end gap-3">
-                    <button wire:click="clearFilters" class="px-4 py-2.5 rounded-xl border border-gray-200 text-gray-700 bg-white hover:bg-gray-50">Reset</button>
-                    <button @click="open=false" wire:click="$refresh" class="px-4 py-2.5 rounded-xl bg-blue-600 text-white hover:bg-blue-700">Apply Filter</button>
+                <!-- Fixed footer -->
+                <div class="border-t bg-white">
+                    <div class="p-5 flex justify-end gap-3">
+                        <button type="button" wire:click="clearFilters" class="px-4 py-2.5 rounded-xl border border-gray-200 text-gray-700 bg-white hover:bg-gray-50">Reset</button>
+                        <button type="button" @click="showFilterPanel = false" class="px-4 py-2.5 rounded-xl bg-blue-600 text-white hover:bg-blue-700">Close</button>
+                    </div>
                 </div>
             </div>
         </div>
@@ -192,3 +223,4 @@
         <div class="mt-6 flex justify-center">{{ $products->links() }}</div>
     </section>
 </x-ecommerce.page-wrapper>
+</div>

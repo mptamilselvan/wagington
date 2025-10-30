@@ -178,29 +178,11 @@ class CheckoutPage extends Component
 
     /**
      * Check if any cart items require shipping based on product's shippable field
+     * Uses the same service method as API for consistency
      */
     private function checkShippingRequirement(): void
     {
-        $this->requiresShipping = false;
-        
-        if (!empty($this->cart['items'])) {
-            $variantIds = collect($this->cart['items'])->pluck('variant_id')->filter();
-            
-            if ($variantIds->isNotEmpty()) {
-                // Load product variants with their products to check shippable field
-                $variants = \App\Models\ProductVariant::with('product')
-                    ->whereIn('id', $variantIds)
-                    ->get();
-                
-                // Check if any product is shippable
-                foreach ($variants as $variant) {
-                    if ($variant->product && $variant->product->shippable) {
-                        $this->requiresShipping = true;
-                        break;
-                    }
-                }
-            }
-        }
+        $this->requiresShipping = $this->checkoutService?->cartRequiresShipping($this->cart) ?? true;
         
         // If no shipping is required, clear shipping address selection
         if (!$this->requiresShipping) {

@@ -68,23 +68,40 @@
                             <div class="flex items-center gap-3 mt-4">
                                 @php
                                     $maxQty = 999999;
+                                    $maxQtyPerOrder = (int)($it['max_quantity_per_order'] ?? 0);
+                                    
                                     if (!empty($it['track_inventory'])) {
-                                        $maxQty = (int)($it['allow_backorders'] ? ($it['max_quantity_per_order'] ?: 999999) : ($it['available'] ?? 0));
-                                        $maxQty = max(1, $maxQty);
+                                        if ($maxQtyPerOrder > 0) {
+                                            // If max_quantity_per_order is set, use it as the primary limit
+                                            $maxQty = $maxQtyPerOrder;
+                                            
+                                            // If backorders are not allowed, also consider available stock
+                                            if (!($it['allow_backorders'] ?? false)) {
+                                                $available = (int)($it['available'] ?? 0);
+                                                $maxQty = min($maxQty, $available);
+                                                // Ensure we have at least 1 only if stock is available
+                                                $maxQty = $available > 0 ? max(1, $maxQty) : 0;
+                                            }
+                                        } else {
+                                            // No max_quantity_per_order set, use available stock or unlimited for backorders
+                                            if ($it['allow_backorders'] ?? false) {
+                                                $maxQty = 999999;
+                                            } else {
+                                                $available = (int)($it['available'] ?? 0);
+                                                $maxQty = $available > 0 ? max(1, $available) : 0;
+                                            }
+                                        }
                                     }
+                                    
+                                    $currentQty = (int)($it['qty'] ?? 0);
+                                    $effectiveLimit = $maxQty;
                                 @endphp
-                                <button class="flex items-center justify-center w-8 h-8 border border-gray-300 rounded-lg hover:bg-gray-50 focus:outline-none focus:ring-2 focus:ring-blue-500 transition-colors" wire:click="decrement('{{ $it['id'] }}')">
-                                    <svg class="w-4 h-4 text-gray-600" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                                        <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M20 12H4" />
-                                    </svg>
-                                </button>
-                                <div class="flex items-center justify-center w-12 h-8 text-base font-medium text-gray-900 bg-gray-50 rounded-lg border border-gray-200">{{ $it['qty'] }}</div>
-                                <button class="flex items-center justify-center w-8 h-8 border border-gray-300 rounded-lg hover:bg-gray-50 focus:outline-none focus:ring-2 focus:ring-blue-500 transition-colors" wire:click="increment('{{ $it['id'] }}')" @disabled($it['qty'] >= $maxQty)>
-                                    <svg class="w-4 h-4 text-gray-600" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                                        <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 4v16m8-8H4" />
-                                    </svg>
-                                </button>
+                                <input type="number" min="1" max="{{ $effectiveLimit }}" wire:model.live="cart.items.{{ $loop->index }}.qty" class="w-24 text-center border rounded py-1" />
                             </div>
+                            
+                            @if($currentQty > $effectiveLimit)
+                                <div class="text-xs text-red-600 mt-2 font-medium">Maximum quantity allowed is {{ $effectiveLimit }}</div>
+                            @endif
                             
                             @if(!empty($it['addons']))
                                 <div class="mt-4 pt-3 border-t border-gray-100">
@@ -154,10 +171,10 @@
             <div class="flex gap-3" x-data="{ showAuthPrompt: false }" x-on:show-auth-prompt.window="showAuthPrompt = true">
                 @auth
                     <a href="{{ route('shop.cart') }}" class="flex-1 px-4 py-2 border rounded text-center">View cart</a>
-                    <button wire:click="proceed" class="flex-1 px-4 py-2 rounded bg-blue-600 text-white text-center">Proceed to pay</button>
+                    <button wire:click="proceed" @disabled($this->hasQuantityErrors()) class="flex-1 px-4 py-2 rounded {{ $this->hasQuantityErrors() ? 'bg-gray-400 text-gray-200 cursor-not-allowed' : 'bg-blue-600 text-white' }} text-center">Proceed to pay</button>
                 @else
                     <button type="button" @click="showAuthPrompt = true" class="flex-1 px-4 py-2 border rounded text-center">View cart</button>
-                    <button type="button" wire:click="guestProceed" class="flex-1 px-4 py-2 rounded bg-blue-600 text-white text-center">Proceed to pay</button>
+                    <button type="button" wire:click="guestProceed" @disabled($this->hasQuantityErrors()) class="flex-1 px-4 py-2 rounded {{ $this->hasQuantityErrors() ? 'bg-gray-400 text-gray-200 cursor-not-allowed' : 'bg-blue-600 text-white' }} text-center">Proceed to pay</button>
 
                     <!-- Guest Auth Prompt -->
                     <div x-cloak x-show="showAuthPrompt" class="fixed inset-0 z-[70] flex items-center justify-center">

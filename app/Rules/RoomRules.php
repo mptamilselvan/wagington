@@ -15,7 +15,7 @@ class RoomRules
                 'string',
                 'max:255',
                 function ($attribute, $value, $fail) use ($editId) {
-                    $query = \App\Models\RoomModel::whereRaw('LOWER(name) = LOWER(?)', [$value]);
+                    $query = \App\Models\Room\RoomModel::whereRaw('LOWER(name) = LOWER(?)', [$value]);
                     
                     if ($editId) {
                         $query->where('id', '!=', $editId);

@@ -139,7 +139,7 @@
                         wire:click="togglePaymentSection"
                         x-bind:disabled="!@js($selectedShippingAddressId) || (!@js($billingAddressSameAsShipping) && !@js($selectedBillingAddressId))"
                     >
-                        Continue to Payment
+                        Payment Card Details
                     </button>
                 </div>
             @else

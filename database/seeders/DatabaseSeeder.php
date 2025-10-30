@@ -27,6 +27,5 @@ class DatabaseSeeder extends Seeder
         $this->call(SystemSettingSeeder::class);
         $this->call(TaxSettingSeeder::class);
         $this->call(CatalogSeeder::class);
-        $this->call(ShippingRateSeeder::class);
-    }
+        $this->call(ShippingRateSeeder::class);    }
 }

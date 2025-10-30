@@ -1,4 +1,4 @@
-<div x-data="{ open:false }" x-on:open-booking.window="open=true; $wire.refreshBooking(); $wire.setRoom($event.detail.roomId);" x-cloak>
+<div x-data="{ open:false }" x-on:open-booking.window="open=true; $wire.refreshBooking(); if($event.detail.roomId){ $wire.setRoom($event.detail.roomId); } if($event.detail.roomTypeId){ $wire.room_type_id = $event.detail.roomTypeId; }" x-cloak>
     <!-- Backdrop -->
     <div x-show="open" class="fixed inset-0 z-[60] bg-black/40" @click="open=false"></div>
 
@@ -82,6 +82,54 @@
                     </div>
                 @endforelse
             </div>
+        </div>
+
+        <!-- Date Selection Section -->
+        <div class="px-4 pt-4 pb-4 border-b border-gray-200">
+            <div class="grid grid-cols-1 md:grid-cols-2 gap-5">
+                <div>
+                    
+                    <div class="flex items-center justify-between">
+                        @component('components.date-component', [
+                            'wireModel' => 'start_date',
+                            'id' => 'startDate',
+                            'label' => 'Start Date',
+                            'star' => true,
+                            'class' => 'w-full text-xl text-gray-800',
+                            'error' => $errors->first('start_date'),
+                            'min' => date('Y-m-d')
+                            ])
+                        @endcomponent
+                    </div>
+                </div>
+                <div>
+                    <div class="flex items-center justify-between">
+                           @component('components.date-component', [
+                            'wireModel' => 'end_date',
+                            'id' => 'endDate',
+                            'label' => 'End Date',
+                            'star' => true,
+                            'class' => 'w-full text-xl text-gray-800',
+                            'error' => $errors->first('end_date'),
+                            'min' => date('Y-m-d')
+                            ])
+                        @endcomponent
+                    </div>
+                </div>
+            </div>
+            <div class="mt-6">
+                <button wire:click="checkAvailability" class="w-full md:w-auto px-6 py-3 rounded-full bg-blue-600 hover:bg-blue-700 text-white font-semibold shadow-md">Check Availability</button>
+            </div>
+            @if($errors->has('start_date') || $errors->has('end_date'))
+                <div class="text-red-500 text-sm mt-2">
+                    {{ $errors->first('start_date') }}
+                </div>
+            @endif
+            @if($errors->has('end_date'))
+                <div class="text-red-500 text-sm mt-2">
+                    {{ $errors->first('end_date') }}
+                </div>
+            @endif
         </div>
 
         <!-- Add-ons and Agreements -->

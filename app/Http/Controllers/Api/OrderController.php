@@ -20,7 +20,10 @@ use Illuminate\Support\Facades\Log;
  */
 class OrderController extends Controller
 {
-    public function __construct(private ECommerceService $svc) {}
+    public function __construct(
+        private ECommerceService $svc,
+        private InvoiceService $invoiceService
+    ) {}
 
     /**
      * @OA\Get(
@@ -208,40 +211,58 @@ class OrderController extends Controller
             ->where('user_id', $user->id)
             ->firstOrFail();
             
-        // Get the first payment for this order
-        $payment = $order->payments()->first();
-        
-        if (!$payment) {
-            return response()->json([
-                'status' => 'error',
-                'message' => 'No payment found for this order'
-            ], 404);
-        }
-        
-        // Check if invoice already exists
-        if (!empty($payment->invoice_url) && !empty($payment->invoice_pdf_url)) {
+        try {
+            // Begin transaction and lock the payment row
+            $result = \DB::transaction(function() use ($order) {
+                // Get and lock the first payment for this order
+                $payment = $order->payments()
+                    ->lockForUpdate()
+                    ->first();
+                
+                if (!$payment) {
+                    throw new \RuntimeException('No payment found for this order');
+                }
+                
+                // Check if invoice already exists
+                if (!empty($payment->invoice_url) && !empty($payment->invoice_pdf_url)) {
+                    return [
+                        'exists' => true,
+                        'payment' => $payment
+                    ];
+                }
+                
+                // Generate and save the invoice
+                $result = $this->invoiceService->saveInvoiceAndUpdatePayment($order, $payment);
+                
+                if (!$result) {
+                    throw new \RuntimeException('Failed to generate invoice');
+                }
+                
+                $payment->refresh();
+                return [
+                    'exists' => false,
+                    'payment' => $payment
+                ];
+            });
+            
+            // Handle the result outside the transaction
+            $payment = $result['payment'];
             return response()->json([
                 'status' => 'success',
-                'message' => 'Invoice already exists',
+                'message' => $result['exists'] ? 'Invoice already exists' : 'Invoice generated successfully',
                 'invoice_url' => $payment->invoice_url,
-                'invoice_pdf_url' => $payment->invoice_pdf_url,
-                'invoice_number' => $payment->invoice_number
+        } catch (\InvalidArgumentException | \Illuminate\Validation\ValidationException $e) {
+            Log::warning('Invalid data while generating invoice', [
+                'order_number' => $orderNumber,
+                'user_id' => $user->id,
+                'error' => $e->getMessage(),
+                'trace' => $e->getTraceAsString()
             ]);
-        }
-        
-        try {
-            // Generate and save the invoice
-            $invoiceService = app(InvoiceService::class);
-            $result = $invoiceService->saveInvoiceAndUpdatePayment($order, $payment);
             
-            if ($result) {
-                // Reload the payment to get updated information
-                $payment->refresh();
-                
-                return response()->json([
-                    'status' => 'success',
-                    'message' => 'Invoice generated successfully',
-                    'invoice_url' => $payment->invoice_url,
+            return response()->json([
+                'status' => 'error',
+                'message' => 'Invalid order data. Please contact support if the issue persists.'
+            ], 422);
                     'invoice_pdf_url' => $payment->invoice_pdf_url,
                     'invoice_number' => $payment->invoice_number
                 ]);

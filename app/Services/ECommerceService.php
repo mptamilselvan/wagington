@@ -57,7 +57,7 @@ class ECommerceService
     // -------------------------
     // Landing
     // -------------------------
-    public function getLandingSections(int $perCategory = 8, ?string $q = null): array
+    public function getLandingSections(int $perCategory = 4, ?string $q = null): array
     {
         // Get parent categories first (no parent_id), then child categories
         // This helps avoid duplicates by prioritizing parent categories
@@ -176,6 +176,17 @@ class ECommerceService
             });
         }
 
+        // Search query filter
+        if ($q !== '') {
+            $sq = str_replace(['%', '_'], ['\\%', '\\_'], $q);
+            $query->where(function(Builder $qb) use ($sq) {
+                $qb->where('name', 'like', "%{$sq}%")
+                   ->orWhere('slug', 'like', "%{$sq}%")
+                   ->orWhere('description', 'like', "%{$sq}%");
+            });
+            Log::info('Applying search filter', ['q' => $q]);
+        }
+
         // Shippable filter
         if ($shippableFilter !== null && $shippableFilter !== '') {
             $isShippable = filter_var($shippableFilter, FILTER_VALIDATE_BOOLEAN, FILTER_NULL_ON_FAILURE);
@@ -213,9 +224,7 @@ class ECommerceService
                 foreach ($filteredAttrGroups as $attrName => $values) {
                     $qb->where(function(Builder $qq) use ($attrName, $values) {
                         foreach ($values as $v) {
-                            // Support both new 'variant_attributes' and legacy 'attributes' columns
-                            $qq->orWhereJsonContains('variant_attributes->'.$attrName, $v)
-                               ->orWhereJsonContains('attributes->'.$attrName, $v);
+                            $qq->orWhereJsonContains('variant_attributes->'.$attrName, $v);
                         }
                     });
                 }
@@ -432,7 +441,7 @@ class ECommerceService
     {
         // Total item count = sum of main items + addons quantities
         $mainQty = (int) ($order->items->sum('quantity'));
-        $addonQty = (int) ($order->items->flatMap(fn($it) => $it->addons)->sum('quantity'));
+        $addonQty = (int) ($order->items->flatMap(fn($it) => $it->addons ? $it->addons : collect())->sum('quantity'));
         $totalItems = $mainQty + $addonQty;
         
         // Build a small preview of items (up to 3) with optional image URLs
@@ -466,12 +475,12 @@ class ECommerceService
             ->where('order_number', $orderNumber)
             ->with([
                 'items' => function($q){
-                    $q->select('id','order_id','product_id','product_name','variant_display_name','product_attributes','quantity','unit_price','total_price');
+                    $q->select('id','order_id','product_id','product_name','variant_display_name','product_attributes','quantity','unit_price','total_price','variant_id');
                 },
                 'items.addons:id,order_item_id,addon_name,quantity,unit_price,total_price,addon_product_id',
                 'shippingAddress','billingAddress','payments','appliedVouchers'
             ])->firstOrFail();
-        
+
         // Preload product images in bulk for listing visuals (main items)
         $productIds = $order->items->pluck('product_id')->filter()->unique()->values();
         $productImages = [];
@@ -498,11 +507,11 @@ class ECommerceService
                 $addonImages[$ap->id] = $primary ? ImageService::getImageUrl($primary->file_path ?: $primary->file_url) : null;
             }
         }
-        
+
         $mainQty = (int) $order->items->sum('quantity');
         $addonQty = (int) $order->items->flatMap(fn($it) => $it->addons)->sum('quantity');
         $totalItems = $mainQty + $addonQty;
-        
+
         $items = $order->items->map(function($it) use ($productImages, $addonImages){
             return [
                 'name' => $it->product_name,
@@ -633,7 +642,7 @@ class ECommerceService
             ->where('user_id', $user->id)
             ->with([
                 'items' => function($q){
-                    $q->select('id','order_id','product_id','product_name','variant_display_name','product_attributes','quantity','unit_price','total_price');
+                    $q->select('id','order_id','product_id','product_name','variant_display_name','product_attributes','quantity','unit_price','total_price','variant_id');
                 },
                 'items.addons:id,order_item_id,addon_name,quantity,unit_price,total_price,addon_product_id',
                 'shippingAddress','billingAddress','payments','appliedVouchers'
@@ -877,7 +886,7 @@ class ECommerceService
         $variants = $product->variants()
             ->with(['mediaAssets' => function($q){ $q->orderBy('display_order'); }])
             ->get()
-            ->map(function($v) use ($generalGallery){
+            ->map(function($v) use ($generalGallery, $product){
                 $primary = $v->getPrimaryImage();
                 // Use model helper to combine general + variant + option images in correct order
                 $display = $v->getDisplayImages();
@@ -888,6 +897,17 @@ class ECommerceService
                 if (empty($gallery)) {
                     // Fallback to general gallery only
                     $gallery = $generalGallery;
+                }
+
+                // If this is the primary variant and it has a primary image, make sure it's first in the gallery
+                if ($v->is_primary && $primary) {
+                    $primaryImageUrl = ImageService::getImageUrl($primary->file_path ?: $primary->file_url);
+                    // Remove the primary image from wherever it is in the gallery and put it first
+                    $gallery = array_filter($gallery, function($url) use ($primaryImageUrl) {
+                        return $url !== $primaryImageUrl;
+                    });
+                    // Add the primary image at the beginning
+                    array_unshift($gallery, $primaryImageUrl);
                 }
 
                 // Use structured attributes only
@@ -911,8 +931,10 @@ class ECommerceService
                     'allow_backorders' => (bool) $v->allow_backorders,
                     'is_primary' => (bool) $v->is_primary,
                     'image' => $primary ? ImageService::getImageUrl($primary->file_path ?: $primary->file_url) : null,
-                    'gallery' => $gallery,
+                    'gallery' => array_values($gallery), // Re-index array after filtering
                     'variant_attributes' => $attrs,
+                    'max_quantity_per_order' => (int) ($v->max_quantity_per_order ?? 0),
+                    'min_quantity_alert' => (int) ($v->min_quantity_alert ?? 0),
                 ];
             })
             ->values()
@@ -937,6 +959,20 @@ class ECommerceService
             return $card;
         })->values()->all();
 
+        // Ensure the primary variant's image is first in the main gallery for variant products
+        if ($product->product_type === 'variant') {
+            $primaryVariant = collect($variants)->firstWhere('is_primary', true);
+            if ($primaryVariant && !empty($primaryVariant['image'])) {
+                $primaryImageUrl = $primaryVariant['image'];
+                // Remove the primary image from wherever it is in the gallery and put it first
+                $gallery = array_filter($gallery, function($url) use ($primaryImageUrl) {
+                    return $url !== $primaryImageUrl;
+                });
+                // Add the primary image at the beginning
+                array_unshift($gallery, $primaryImageUrl);
+            }
+        }
+
         return [
             'id' => $product->id,
             'name' => $product->name,
@@ -945,7 +981,7 @@ class ECommerceService
             'short_description' => $product->short_description, // expose short description for tabs
             'price_min' => (float) ($product->getMinPrice() ?? 0),
             'price_max' => (float) ($product->getMaxPrice() ?? 0),
-            'gallery' => $gallery,
+            'gallery' => array_values($gallery), // Re-index array after filtering
             'variants' => $variants,
             'addons' => $addons,
             // SEO fields
@@ -986,7 +1022,7 @@ class ECommerceService
             try {
                 $variantId = (int)($it['variant_id'] ?? 0);
                 if ($variantId <= 0) continue;
-                $variant = ProductVariant::find($variantId);
+                $variant = ProductVariant::with('mediaAssets', 'product.generalImages')->find($variantId);
                 if (!$variant) continue;
 
                 $qty = max(1, (int)($it['qty'] ?? 1));
@@ -1009,6 +1045,10 @@ class ECommerceService
                 $it['max_quantity_per_order'] = (int) ($variant->max_quantity_per_order ?? 0);
                 $it['min_quantity_alert'] = (int) ($variant->min_quantity_alert ?? 0);
                 $it['backorder_qty'] = (int) $backorderPreview;
+
+                // Recompute image_url to reflect current variant image selection
+                $primaryImage = $variant->getPrimaryImage();
+                $it['image_url'] = $primaryImage ? ImageService::getImageUrl($primaryImage->file_path ?: $primaryImage->file_url) : null;
             } catch (\Throwable $e) {
                 // ignore per-item errors
             }
@@ -1041,7 +1081,7 @@ class ECommerceService
         // Auth users: only validate and persist cart lines; do NOT reserve inventory here (non add-ons)
         if ($this->isAuthenticated()) {
             return DB::transaction(function () use ($variantId, $qty, $addons) {
-                $variant = ProductVariant::with(['product.addons.variants'])->lockForUpdate()->findOrFail($variantId);
+                $variant = ProductVariant::with(['product.addons.variants', 'mediaAssets'])->lockForUpdate()->findOrFail($variantId);
 
                 // Validate stock and limits according to settings, but do not change product_variants here
                 if ($variant->track_inventory) {
@@ -1053,8 +1093,29 @@ class ECommerceService
                         $qty = min($qty, $available);
                     }
                 }
+                
+                // Check max_quantity_per_order limit
                 if ($variant->max_quantity_per_order && $variant->max_quantity_per_order > 0) {
-                    $qty = min($qty, (int)$variant->max_quantity_per_order);
+                    $userId = $this->getCurrentUser()->id;
+                    // Get current quantity in cart for this variant
+                    $currentQty = 0;
+                    $existingCartItems = CartItem::query()
+                        ->where('user_id', $userId)
+                        ->where('variant_id', $variant->id)
+                        ->lockForUpdate()
+                        ->get();
+                    foreach ($existingCartItems as $item) {
+                        $currentQty += (int)$item->quantity;
+                    }
+                    
+                    // Check if adding this quantity would exceed the limit
+                    $proposedTotalQty = $currentQty + $qty;
+                    if ($proposedTotalQty > (int)$variant->max_quantity_per_order) {
+                        throw new \RuntimeException("Maximum quantity allowed per order is " . (int)$variant->max_quantity_per_order . ". You already have " . $currentQty . " in your cart.");
+                    }
+                    
+                    // Apply the limit to the quantity being added
+                    $qty = min($qty, (int)$variant->max_quantity_per_order - $currentQty);
                 }
 
                 // Upsert cart item (unique by user_id, variant_id)
@@ -1096,11 +1157,15 @@ class ECommerceService
                             break;
                         }
                     }
+                    
+                    $addonVariantId = (int)$ad['variant_id'];
+                    $addonQty = max(1, (int)($ad['qty'] ?? 1));
+                    
                     $addonsById[$pid] = [
                         'cart_item_id' => $cartItem->id,
                         'addon_product_id' => $pid,
-                        'addon_variant_id' => (int)$ad['variant_id'],
-                        'quantity' => max(1, (int)($ad['qty'] ?? 1)),
+                        'addon_variant_id' => $addonVariantId,
+                        'quantity' => $addonQty,
                         'is_required' => $isRequired,
                     ];
                 }
@@ -1133,7 +1198,7 @@ class ECommerceService
         }
 
         // Guest flow: do NOT reserve stock on add-to-cart. Maintain session-only snapshot.
-        $variant = ProductVariant::with(['product.addons.variants'])->findOrFail($variantId);
+        $variant = ProductVariant::with(['product.addons.variants', 'mediaAssets'])->findOrFail($variantId);
 
         $sessionToken = Session::get('guest.session_token');
         if (!$sessionToken) {
@@ -1161,8 +1226,26 @@ class ECommerceService
                     $qty = min($qty, $available);
                 }
             }
+            
+            // Check max_quantity_per_order limit for guest users
             if ($variant->max_quantity_per_order && $variant->max_quantity_per_order > 0) {
-                $qty = min($qty, (int)$variant->max_quantity_per_order);
+                // Get current quantity in cart for this variant
+                $currentQty = 0;
+                $existingGuestCartItems = GuestCartItem::where('session_token', $sessionToken)
+                    ->where('variant_id', $variant->id)
+                    ->get();
+                foreach ($existingGuestCartItems as $item) {
+                    $currentQty += (int)$item->quantity;
+                }
+                
+                // Check if adding this quantity would exceed the limit
+                $proposedTotalQty = $currentQty + $qty;
+                if ($proposedTotalQty > (int)$variant->max_quantity_per_order) {
+                    throw new \RuntimeException("Maximum quantity allowed per order is " . (int)$variant->max_quantity_per_order . ". You already have " . $currentQty . " in your cart.");
+                }
+                
+                // Apply the limit to the quantity being added
+                $qty = min($qty, (int)$variant->max_quantity_per_order - $currentQty);
             }
 
             // Persist guest cart to DB for this session using atomic upsert (no inventory reservation)
@@ -1205,11 +1288,15 @@ class ECommerceService
                         break;
                     }
                 }
+                
+                $addonVariantId = (int)$ad['variant_id'];
+                $addonQty = max(1, (int)($ad['qty'] ?? 1));
+                
                 $addonsById[$pid] = [
                     'guest_cart_item_id' => $guestCartItem->id,
                     'addon_product_id' => $pid,
-                    'addon_variant_id' => (int)$ad['variant_id'],
-                    'quantity' => max(1, (int)($ad['qty'] ?? 1)),
+                    'addon_variant_id' => $addonVariantId,
+                    'quantity' => $addonQty,
                     'is_required' => $isRequired,
                 ];
             }
@@ -1248,7 +1335,9 @@ class ECommerceService
                         break;
                     }
                 }
-                $ad['qty'] = max(1, (int)($ad['qty'] ?? 1));
+                
+                $addonQty = max(1, (int)($ad['qty'] ?? 1));
+                $ad['qty'] = $addonQty;
                 $ad['unit_price'] = (float)($ad['unit_price'] ?? 0);
                 $ad['subtotal'] = $ad['unit_price'] * $ad['qty'];
                 $ad['is_required'] = $isRequired;
@@ -1285,9 +1374,9 @@ class ECommerceService
                 ? max(0, $qty - min($qty, $availableNow))
                 : 0;
 
-            // Get primary image for the cart item
+            // Get primary image for the cart item (ensure URL via ImageService)
             $primaryImage = $variant->getPrimaryImage();
-            $imageUrl = $primaryImage ? $primaryImage->file_url : null;
+            $imageUrl = $primaryImage ? ImageService::getImageUrl($primaryImage->file_path ?: $primaryImage->file_url) : null;
 
             $item = [
                 'id' => $itemId,
@@ -1347,8 +1436,26 @@ class ECommerceService
                         $qty = (int)$cartItem->quantity + $delta;
                     }
                 }
+                
+                // Check max_quantity_per_order limit
                 if ($variant->max_quantity_per_order && $variant->max_quantity_per_order > 0) {
-                    $qty = min($qty, (int)$variant->max_quantity_per_order);
+                    $userId = $this->getCurrentUser()->id;
+                    // Get current quantity in cart for this variant (excluding the current item being updated)
+                    $currentQty = 0;
+                    $existingCartItems = CartItem::query()->where('user_id', $userId)->where('variant_id', $variant->id)->get();
+                    foreach ($existingCartItems as $item) {
+                        if ($item->id !== $cartItem->id) { // Exclude the current item being updated
+                            $currentQty += (int)$item->quantity;
+                        }
+                    }
+                    
+                    // Check if the new quantity would exceed the limit
+                    if (($currentQty + $qty) > (int)$variant->max_quantity_per_order) {
+                        throw new \RuntimeException("Maximum quantity allowed per order is " . (int)$variant->max_quantity_per_order . ". You already have " . $currentQty . " in your cart.");
+                    }
+                    
+                    // Apply the limit to the quantity being set
+                    $qty = min($qty, (int)$variant->max_quantity_per_order - $currentQty);
                 }
 
                 $cartItem->quantity = $qty;
@@ -1383,8 +1490,34 @@ class ECommerceService
                 $qty = (int)$cartItem['qty'] + $delta;
             }
         }
+        
+        // Check max_quantity_per_order limit for guest users
         if ($variant->max_quantity_per_order && $variant->max_quantity_per_order > 0) {
-            $qty = min($qty, (int)$variant->max_quantity_per_order);
+            $sessionToken = Session::get('guest.session_token');
+            if ($sessionToken) {
+                // Get current quantity in cart for this variant (excluding the current item being updated)
+                $currentQty = 0;
+                $existingGuestCartItems = GuestCartItem::where('session_token', $sessionToken)
+                    ->where('variant_id', $variant->id)
+                    ->get();
+                foreach ($existingGuestCartItems as $item) {
+                    // We need to check if this item is the same as the one being updated
+                    // This is tricky because we're working with session data
+                    // For now, we'll just check the total quantity
+                    $currentQty += (int)$item->quantity;
+                }
+                
+                // Subtract the current item's quantity since we're updating it
+                $currentQty -= (int)($cartItem['qty'] ?? 0);
+                
+                // Check if the new quantity would exceed the limit
+                if (($currentQty + $qty) > (int)$variant->max_quantity_per_order) {
+                    throw new \RuntimeException("Maximum quantity allowed per order is " . (int)$variant->max_quantity_per_order . ". You already have " . $currentQty . " in your cart.");
+                }
+                
+                // Apply the limit to the quantity being set
+                $qty = min($qty, (int)$variant->max_quantity_per_order - $currentQty);
+            }
         }
 
         // Persist guest row update aggregated per-variant across all session lines
@@ -1553,9 +1686,9 @@ class ECommerceService
                 ];
             }
 
-            // Get primary image for the cart item
+            // Get primary image for the cart item (ensure URL via ImageService)
             $primaryImage = $variant->getPrimaryImage();
-            $imageUrl = $primaryImage ? $primaryImage->file_url : null;
+            $imageUrl = $primaryImage ? ImageService::getImageUrl($primaryImage->file_path ?: $primaryImage->file_url) : null;
 
             // Calculate discount information
             $comparePrice = $variant->compare_price ? (float) $variant->compare_price : null;
@@ -1598,7 +1731,7 @@ class ECommerceService
     // Sync session snapshot from DB for authenticated user
     private function syncSessionFromDb(int $userId): void
     {
-        $dbItems = CartItem::with(['variant.product', 'addons.variant.product'])
+        $dbItems = CartItem::with(['variant.product', 'variant.mediaAssets', 'addons.variant.product', 'addons.variant.mediaAssets'])
             ->where('user_id', $userId)
             ->get();
 
@@ -1608,7 +1741,7 @@ class ECommerceService
     // Sync session snapshot from DB for guest user
     private function syncGuestSessionFromDb(string $sessionToken): void
     {
-        $dbItems = GuestCartItem::with(['variant.product', 'addons.variant.product'])
+        $dbItems = GuestCartItem::with(['variant.product', 'variant.mediaAssets', 'addons.variant.product', 'addons.variant.mediaAssets'])
             ->where('session_token', $sessionToken)
             ->get();
 

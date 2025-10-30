@@ -298,6 +298,7 @@ class CheckoutController extends Controller
         $existingCodes = collect($data['coupon_codes'] ?? [])->filter()->map('trim');
         $newCode = !empty($data['coupon_code']) ? trim($data['coupon_code']) : null;
 
+        // Check max coupons before adding new code
         if (!empty($newCode)) {
             if ($existingCodes->count() >= config('app.max_coupons', 5)) {
                 return response()->json([
@@ -309,18 +310,12 @@ class CheckoutController extends Controller
             $existingCodes->push($newCode);
         }
 
+        // Process codes: filter empty, deduplicate, and prepare final array
         $codes = $existingCodes
             ->filter()
             ->unique()
             ->values()
             ->all();
-
-        if (count($codes) > config('app.max_coupons', 5)) {
-            return response()->json([
-                'status' => 'error',
-                'message' => sprintf('You can apply up to %d coupons at once.', config('app.max_coupons', 5)),
-            ], 422);
-        }
 
         if (empty($codes)) {
             return response()->json([
@@ -396,7 +391,7 @@ class CheckoutController extends Controller
      *   @OA\RequestBody(
      *     required=true,
      *     @OA\JsonContent(
-     *       @OA\Property(property="shipping_address_id", type="integer", description="ID of user's saved shipping address", required={"true"}),
+     *       @OA\Property(property="shipping_address_id", type="integer", description="ID of user's saved shipping address (required only if cart contains shippable items)"),
      *       @OA\Property(property="billing_address_id", type="integer", description="ID of user's saved billing address", required={"true"}),
      *       @OA\Property(property="payment_method_id", type="string", description="Optional Stripe payment method ID"),
      *       @OA\Property(property="coupon_codes", type="array", @OA\Items(type="string"), description="Optional array of coupon codes")
@@ -441,18 +436,28 @@ class CheckoutController extends Controller
      */
     public function placeOrder(Request $request)
     {
-        $data = $request->validate([
-            'shipping_address_id' => 'required|integer|exists:addresses,id',
-            'billing_address_id' => 'required|integer|exists:addresses,id',
-            'payment_method_id' => 'nullable|string',
-            'coupon_codes' => 'nullable|array',
-            'coupon_codes.*' => 'string|max:100',
-        ]);
-
         $cart = $this->shop->getCart();
         if (empty($cart['items'])) {
             return response()->json(['status' => 'error', 'message' => 'Cart is empty'], 422);
         }
+
+        // Check if shipping is required using the same service method as web checkout
+        $shippingRequired = $this->checkout->cartRequiresShipping($cart);
+
+        // Build validation rules
+        $validationRules = [
+            'billing_address_id' => 'required|integer|exists:addresses,id',
+            'payment_method_id' => 'nullable|string',
+            'coupon_codes' => 'nullable|array',
+            'coupon_codes.*' => 'string|max:100',
+        ];
+        
+        // Only require shipping address if shipping is needed (consistent with web checkout)
+        if ($shippingRequired) {
+            $validationRules['shipping_address_id'] = 'required|integer|exists:addresses,id';
+        }
+
+        $data = $request->validate($validationRules);
 
         $user = Auth::user();
 
@@ -465,7 +470,7 @@ class CheckoutController extends Controller
         try {
             \Log::info('CheckoutController.placeOrder: invoking unified checkout', [
                 'user_id' => $user?->id,
-                'shipping_address_id' => $data['shipping_address_id'],
+                'shipping_address_id' => $data['shipping_address_id'] ?? null,
                 'billing_address_id' => $data['billing_address_id'],
                 'payment_method_id' => $data['payment_method_id'] ?? null,
                 'coupon_codes' => $data['coupon_codes'] ?? null,
@@ -475,7 +480,7 @@ class CheckoutController extends Controller
             $result = $this->checkout->checkoutUnified(
                 $cart,
                 $user,
-                $data['shipping_address_id'],
+                $data['shipping_address_id'] ?? null,
                 $data['billing_address_id'],
                 $data['payment_method_id'] ?? null,
                 session()->get('guest.session_token'),

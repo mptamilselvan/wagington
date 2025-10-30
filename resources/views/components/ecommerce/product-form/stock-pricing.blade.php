@@ -167,7 +167,8 @@
                                 wire:model="max_quantity_per_order"
                                 placeholder="Enter"
                                 min="1"
-                                class="w-full min-w-[120px] px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent text-sm"
+                                @if($product_type === 'addon') readonly @endif
+                                class="w-full min-w-[120px] px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent text-sm @if($product_type === 'addon') bg-gray-100 cursor-not-allowed @endif"
                             >
                             @error('max_quantity_per_order') <span class="text-red-500 text-xs">{{ $message }}</span> @enderror
                         </td>

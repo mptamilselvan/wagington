@@ -189,12 +189,24 @@ class InvoiceService
             $pdf->SetFont('Helvetica', '', 10);
             $shipping = $order->shippingAddress;
             if ($shipping) {
-                $pdf->Cell(0, 5, ($shipping->first_name ?? '') . ' ' . ($shipping->last_name ?? ''), 0, 1, 'L');
+                $firstName = $shipping->first_name ?? '';
+                $lastName = $shipping->last_name ?? '';
+                $fullName = trim($firstName . ' ' . $lastName);
+                $pdf->Cell(0, 5, $fullName ?: 'N/A', 0, 1, 'L');
                 $pdf->Cell(0, 5, $shipping->address_line1 ?? '', 0, 1, 'L');
+                
+                // Add address line 2 if it exists
                 if (!empty($shipping->address_line2)) {
                     $pdf->Cell(0, 5, $shipping->address_line2, 0, 1, 'L');
                 }
-                $pdf->Cell(0, 5, ($shipping->city ?? '') . ', ' . ($shipping->postal_code ?? ''), 0, 1, 'L');
+                
+                // City and postal code
+                $city = $shipping->city ?? '';
+                $postalCode = $shipping->postal_code ?? '';
+                $cityPostal = trim($city . ($city && $postalCode ? ', ' : '') . $postalCode);
+                $pdf->Cell(0, 5, $cityPostal ?: '', 0, 1, 'L');
+                
+                // Country
                 $pdf->Cell(0, 5, $shipping->country ?? '', 0, 1, 'L');
             } else {
                 $pdf->Cell(0, 5, 'N/A', 0, 1, 'L');
@@ -279,7 +291,7 @@ class InvoiceService
         $discountAmount = $order->coupon_discount_amount ?? 0;
         if ($discountAmount > 0) {
             $pdf->SetX(130);
-            $pdf->SetTextColor(0, 128, 0); // Green color for discount`
+            $pdf->SetTextColor(0, 128, 0); // Green color for discount
             $pdf->Cell(30, 6, 'Discount:', 1, 0, 'L');
             $pdf->Cell(35, 6, '-$' . number_format($discountAmount, 2), 1, 1, 'R');
             $pdf->SetTextColor(0, 0, 0); // Reset to black

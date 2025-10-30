@@ -56,7 +56,8 @@ class EcommerceController extends Controller
     /**
      * @OA\Get(
      *   path="/api/ecommerce/products",
-     *   summary="List products",
+     *   summary="List products with filters",
+     *   description="List products with dynamic filtering. For attribute filters, use attrs[AttributeName][]=value format (e.g., attrs[Size][]=Large&attrs[Color][]=Black). Get available attribute names from /api/ecommerce/filters endpoint.",
      *   tags={"E-commerce"},
      *   security={{},{"bearerAuth":{}}},
      *   @OA\Parameter(
@@ -68,9 +69,11 @@ class EcommerceController extends Controller
      *   @OA\Parameter(name="page", in="query", required=false, @OA\Schema(type="integer")),
      *   @OA\Parameter(name="category_id", in="query", required=false, @OA\Schema(type="integer")),
      *   @OA\Parameter(name="catalog_id", in="query", required=false, @OA\Schema(type="integer")),
-     *   @OA\Parameter(name="shippable", in="query", required=false, description="Filter by shippable status", @OA\Schema(type="string", enum={"true", "false"})),
+     *   @OA\Parameter(name="shippable", in="query", required=false, description="Filter by shippable status", @OA\Schema(type="string", enum={"true", "false", ""})),
      *   @OA\Parameter(name="q", in="query", required=false, description="Search query", @OA\Schema(type="string")),
      *   @OA\Parameter(name="sort", in="query", required=false, description="Sort order", @OA\Schema(type="string", enum={"newest", "price_asc", "price_desc"})),
+     *   @OA\Parameter(name="price_min", in="query", required=false, description="Minimum price filter", @OA\Schema(type="number", format="float")),
+     *   @OA\Parameter(name="price_max", in="query", required=false, description="Maximum price filter", @OA\Schema(type="number", format="float")),
      *   @OA\Response(
      *     response=200,
      *     description="Products retrieved successfully",
@@ -507,7 +510,8 @@ class EcommerceController extends Controller
         
         try {
             // Fetch the PDF content
-            $response = Http::timeout(30)->get($payment->invoice_pdf_url);
+            // Note: This blocks the request thread. Consider moving to a queue for production.
+            $response = Http::timeout(10)->get($payment->invoice_pdf_url);
             
             if ($response->failed()) {
                 if (request()->expectsJson()) {

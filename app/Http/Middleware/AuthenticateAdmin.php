@@ -30,6 +30,7 @@ class AuthenticateAdmin
                 return response()->json(['error' => 'Access denied. Admin access required.'], 403);
             }
             return redirect()->route('login')->with('error', 'Access denied. Admin access required.');
+            // return redirect()->route('home')->with('error', 'Access denied. Admin access required.');
         }
 
         return $next($request);
