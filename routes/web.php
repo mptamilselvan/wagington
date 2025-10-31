@@ -42,6 +42,7 @@ use App\Livewire\Backend\Room\OffDay;
 use App\Livewire\Backend\Room\RoomPriceOption;
 use App\Livewire\Backend\Room\RoomType;
 use App\Livewire\Backend\Room\Room;
+use App\Livewire\Backend\Room\RoomWeekend;
 // The welcome page
 Route::get('/', function () {
     // If user is authenticated and has customer role, redirect to dashboard
@@ -222,6 +223,7 @@ Route::namespace('App\Livewire\Backend')->prefix('admin')->middleware(['auth', '
     Route::get('/room-off-days', [OffDay::class, 'index'])->name('room-off-days');
     Route::get('/room-price-options', [RoomPriceOption::class, 'index'])->name('room-price-options');
     Route::get('/room-cancel-setting', [CancelSetting::class, 'index'])->name('room-cancel-setting');
+    Route::get('/room-weekend', [RoomWeekend::class, 'index'])->name('room-weekend');
     Route::get('/system-settings', 'SystemSetting@index')->name('system-settings');
     Route::get('/company-settings', 'CompanySettings@index')->name('company-settings');
     Route::get('/operational-hours', 'OperationalHours@index')->name('operational-hours');

@@ -30,6 +30,11 @@ class RoomModel extends Model
         'status' => 'string',
     ];
 
+    public const STATUS_AVAILABLE = 'available';
+    public const STATUS_HOUSEKEEPING = 'housekeeping';
+    public const STATUS_OCCUPIED = 'occupied';
+    public const STATUS_OUT_OF_SERVICE = 'outofservice';
+
     // Relationships
     public function roomType()
     {

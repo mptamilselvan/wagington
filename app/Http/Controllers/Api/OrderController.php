@@ -251,27 +251,8 @@ class OrderController extends Controller
                 'status' => 'success',
                 'message' => $result['exists'] ? 'Invoice already exists' : 'Invoice generated successfully',
                 'invoice_url' => $payment->invoice_url,
-        } catch (\InvalidArgumentException | \Illuminate\Validation\ValidationException $e) {
-            Log::warning('Invalid data while generating invoice', [
-                'order_number' => $orderNumber,
-                'user_id' => $user->id,
-                'error' => $e->getMessage(),
-                'trace' => $e->getTraceAsString()
             ]);
             
-            return response()->json([
-                'status' => 'error',
-                'message' => 'Invalid order data. Please contact support if the issue persists.'
-            ], 422);
-                    'invoice_pdf_url' => $payment->invoice_pdf_url,
-                    'invoice_number' => $payment->invoice_number
-                ]);
-            } else {
-                return response()->json([
-                    'status' => 'error',
-                    'message' => 'Failed to generate invoice'
-                ], 500);
-            }
         } catch (\InvalidArgumentException | \Illuminate\Validation\ValidationException $e) {
             Log::warning('Invalid data while generating invoice', [
                 'order_number' => $orderNumber,

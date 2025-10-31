@@ -21,7 +21,11 @@ use App\Models\Room\RoomTypeModel;
 use App\Models\Room\RoomBookingModel;
 use App\Models\Room\RoomModel;
 use App\Models\Room\PetSizeLimitModel;
+use App\Models\Room\PeakSeasonModel;
+use App\Models\Room\RoomWeekendModel;
+use Carbon\Carbon;
 use App\Models\Pet;
+use App\Models\Size;
 
 class RoomService
 {
@@ -198,11 +202,17 @@ class RoomService
 
         return $matches;
     }
-    public function checkRoomAvailability($room_type_id, $check_in_date, $check_out_date)
+    public function checkRoomAvailability($room_type_id, $check_in_date, $check_out_date, array $selected_pet_ids)
     {
+        if (empty($selected_pet_ids)) {
+            return [
+                'status' => false,
+                'message' => 'Please select at least one pet to check availability',
+            ];
+        }
         $roomType = RoomTypeModel::find($room_type_id);
         if (!$roomType) {
-            return false;
+            return ['status' => false, 'message' => 'Room type not found'];
         }
 
         // Get pet size limits for this room type
@@ -227,7 +237,7 @@ class RoomService
 
         if (empty($limitsMap)) {
             // No limits configured means not available (or unlimited). Choose conservative: not available
-            return false;
+            return ['status' => false, 'message' => 'No limits configured'];
         }
 
         // Find bookings that overlap with the requested window
@@ -240,31 +250,256 @@ class RoomService
                          ->where('check_out_date', '>=', $check_out_date);
                   });
             })
-            ->get(['pets_reserved']);
-
-        // Aggregate reserved counts per pet_size_id
+            ->get(['pets_reserved','id','room_id']);
+        // Collect reserved room ids, filter out nulls
+        $reservedRoomIds = collect($bookings)->pluck('room_id')->filter(fn($id) => !is_null($id))->unique()->values();
+        
+        // Count rooms for this room type
+        $roomsQuery = RoomModel::where('room_type_id', $room_type_id);
+        $totalRoomsCount = (int) $roomsQuery->count();
+        
+        // Available rooms for this room type in the requested window (only if rooms are defined)
+        
+        // Aggregate reserved counts per pet_size_id and per room
         $reservedCounts = [];
+        $reservedCountsByRoom = [];
         foreach ($bookings as $bk) {
             if (empty($bk->pets_reserved)) {
                 continue;
             }
-            $pets = json_decode($bk->pets_reserved, true) ?: [];
+            // pets_reserved may already be an array due to model casts
+            $pets = is_string($bk->pets_reserved)
+                ? (json_decode($bk->pets_reserved, true) ?: [])
+                : (is_array($bk->pets_reserved) ? $bk->pets_reserved : []);
             foreach ($pets as $p) {
                 if (is_array($p) && isset($p['pet_size_id'])) {
                     $sid = (int)$p['pet_size_id'];
                     $reservedCounts[$sid] = ($reservedCounts[$sid] ?? 0) + 1;
+                    $rid = $bk->room_id;
+                    if (!is_null($rid)) {
+                        if (!isset($reservedCountsByRoom[$rid])) {
+                            $reservedCountsByRoom[$rid] = [];
+                        }
+                        $reservedCountsByRoom[$rid][$sid] = ($reservedCountsByRoom[$rid][$sid] ?? 0) + 1;
+                    }
                 }
             }
         }
 
-        // Check against limits
+        // Fetch pet size names for all size IDs
+        $sizeIds = array_keys($limitsMap);
+        $sizes = Size::whereIn('id', $sizeIds)->get()->keyBy('id');
+        
+        // Build per-size availability details (overall)
+        $petSizeAvailability = [];
+        $hasAnySizeCapacity = false;
+        // If specific pets are selected, only consider their sizes for display and capacity checks
+        $selectedSizeSet = [];
+        if (!empty($selected_pet_ids)) {
+            $selectedSizeSet = array_fill_keys(
+                Pet::whereIn('id', $selected_pet_ids)->pluck('pet_size_id')->filter()->map(fn($v) => (int)$v)->toArray(),
+                true
+            );
+        }
         foreach ($limitsMap as $sizeId => $limit) {
+            if (!empty($selectedSizeSet) && !isset($selectedSizeSet[(int)$sizeId])) {
+                continue;
+            }
             $used = $reservedCounts[$sizeId] ?? 0;
-            if ($used >= $limit) {
-                return false; // capacity reached for this size
+            $remaining = max(0, (int)$limit - (int)$used);
+            if ($remaining > 0) {
+                $hasAnySizeCapacity = true;
+            }
+            $size = $sizes->get($sizeId);
+            $petSizeAvailability[] = [
+                'pet_size_id' => (int)$sizeId,
+                'pet_size_name' => $size ? $size->name : 'Unknown',
+                'limit' => (int)$limit,
+                'used' => (int)$used,
+                'remaining' => (int)$remaining,
+            ];
+        }
+
+        // If specific pets are selected, compute if their sizes can be accommodated
+        $selectedPetSizeCounts = [];
+        $selectedSizesOkBySize = [];
+        $selectedAllSizesOk = true;
+        if (!empty($selected_pet_ids)) {
+            $selectedSizeIds = Pet::whereIn('id', $selected_pet_ids)->pluck('pet_size_id')->filter()->map(fn($v) => (int)$v)->toArray();
+            foreach ($selectedSizeIds as $sid) {
+                $selectedPetSizeCounts[$sid] = ($selectedPetSizeCounts[$sid] ?? 0) + 1;
+            }
+
+            \Log::info("selectedPetSizeCounts: " . json_encode($selectedPetSizeCounts));
+            // Build a quick lookup for remaining per size
+            $remainingBySize = [];
+            foreach ($petSizeAvailability as $row) {
+                $remainingBySize[(int)$row['pet_size_id']] = (int)$row['remaining'];
+            }
+            foreach ($selectedPetSizeCounts as $sid => $need) {
+                $remaining = $remainingBySize[$sid] ?? 0;
+                $ok = $remaining >= $need;
+                $selectedSizesOkBySize[(int)$sid] = [
+                    'needed' => (int)$need,
+                    'remaining' => (int)$remaining,
+                    'ok' => $ok,
+                ];
+                if (!$ok) {
+                    $selectedAllSizesOk = false;
+                }
+            }
+        }
+        $availableRoomsCount = 0;
+        // Build per-room per-size availability details
+        $petSizeAvailabilityByRoom = [];
+        if ($totalRoomsCount > 0) {
+            $roomIds = (clone $roomsQuery)->where('status', RoomModel::STATUS_AVAILABLE)->pluck('id');
+            $availableRoomIds = [];
+            foreach ($roomIds as $rid) {
+                $sizesForRoom = [];
+                foreach ($limitsMap as $sizeId => $limit) {
+                    if (!empty($selectedSizeSet) && !isset($selectedSizeSet[(int)$sizeId])) {
+                        continue;
+                    }
+                    $size = $sizes->get($sizeId);
+                    $usedForRoom = $reservedCountsByRoom[$rid][$sizeId] ?? 0;
+                    $remainingForRoom = max(0, (int)$limit - (int)$usedForRoom);
+                    $sizesForRoom[] = [
+                        'pet_size_id' => (int)$sizeId,
+                        'pet_size_name' => $size ? $size->name : 'Unknown',
+                        'limit' => (int)$limit,
+                        'used' => (int)$usedForRoom,
+                        'remaining' => (int)$remainingForRoom,
+                    ];
+                }
+                $petSizeAvailabilityByRoom[] = [
+                    'room_id' => (int)$rid,
+                    'sizes' => $sizesForRoom,
+                ];
+                // Mark room available if any selected size has remaining > 0
+                foreach ($sizesForRoom as $row) {
+                    if (($row['remaining'] ?? 0) > 0) {
+                        $availableRoomIds[(int)$rid] = true;
+                        break;
+                    }
+                }
+            }
+            // Add rooms with no bookings and available status
+            $availableNotBookedIds = $roomsQuery->whereNotIn('id', $reservedRoomIds)
+                                ->where('status', '=', RoomModel::STATUS_AVAILABLE)
+                                ->where('room_type_id', '=', $room_type_id)
+                                ->pluck('id')
+                                ->toArray();
+            foreach ($availableNotBookedIds as $rid) {
+                $availableRoomIds[(int)$rid] = true;
+            }
+            $availableRoomsCount = count($availableRoomIds);
+        }
+        \Log::info("booked rooms: " . $bookings->count());
+        if ($totalRoomsCount > 0) {
+            // already accounted available rooms in $availableRoomIds
+        }
+        // Recompute per-size availability aggregating across available rooms only
+        if ($totalRoomsCount > 0) {
+            $availableIdsArray = array_map('intval', array_keys($availableRoomIds ?? []));
+            $petSizeAvailability = [];
+            $hasAnySizeCapacity = false;
+            foreach ($limitsMap as $sizeId => $limit) {
+                if (!empty($selectedSizeSet) && !isset($selectedSizeSet[(int)$sizeId])) {
+                    continue;
+                }
+                $totalLimit = (int)$limit * max(1, (int)$availableRoomsCount);
+                $usedSum = 0;
+                foreach ($availableIdsArray as $rid) {
+                    $usedSum += (int)($reservedCountsByRoom[$rid][$sizeId] ?? 0);
+                }
+                $remaining = max(0, $totalLimit - $usedSum);
+                if ($remaining > 0) {
+                    $hasAnySizeCapacity = true;
+                }
+                $size = $sizes->get($sizeId);
+                $petSizeAvailability[] = [
+                    'pet_size_id' => (int)$sizeId,
+                    'pet_size_name' => $size ? $size->name : 'Unknown',
+                    'limit' => (int)$totalLimit,
+                    'used' => (int)$usedSum,
+                    'remaining' => (int)$remaining,
+                ];
+            }
+        }
+        // Determine overall availability
+        // If specific pets are selected, require capacity for those sizes
+        // If no physical rooms are defined for the room type, rely solely on pet-size capacity
+        $capacityOk = !empty($selected_pet_ids) ? $selectedAllSizesOk : $hasAnySizeCapacity;
+        //$status = (($totalRoomsCount === 0) || ($availableRoomsCount > 0)) && $capacityOk;
+        $status = $availableRoomsCount > 0;
+        //$message = $status ? 'Room is available' : 'Room is not available for the selected dates';
+        $message = $availableRoomsCount>0 ? 'Room is available' : 'Room is not available for the selected dates';
+
+        \Log::info("selectedAllSizesOk: " . $selectedAllSizesOk);
+        \Log::info("hasAnySizeCapacity: " . $hasAnySizeCapacity);
+        \Log::info("capacityOk: " . $capacityOk);
+        \Log::info("availableRoomsCount: " . $availableRoomsCount);
+        \Log::info("petSizeAvailability: " . json_encode($petSizeAvailability));
+        \Log::info("reservedCountsByRoom: " . json_encode($reservedCountsByRoom));
+        \Log::info("petSizeAvailabilityByRoom: " . json_encode($petSizeAvailabilityByRoom));
+
+        // Determine peak season price variation overlapping the requested dates
+        $peakVariation = 0.0;
+        $weekendVariation = 0.0;
+        try {
+            $overlap = PeakSeasonModel::where(function($q) use ($check_in_date, $check_out_date) {
+                    $q->whereBetween('start_date', [$check_in_date, $check_out_date])
+                      ->orWhereBetween('end_date', [$check_in_date, $check_out_date])
+                      ->orWhere(function($qq) use ($check_in_date, $check_out_date) {
+                          $qq->where('start_date', '<=', $check_in_date)
+                             ->where('end_date', '>=', $check_out_date);
+                      });
+                })
+                ->orderByDesc('peak_price_variation')
+                ->first();
+            if ($overlap && $overlap->peak_price_variation !== null) {
+                $peakVariation = (float)$overlap->peak_price_variation;
+            }
+        } catch (\Throwable $e) {
+            // ignore
+        }
+
+        // If not peak season, and any date falls on weekend, fetch weekend variation
+        if ($peakVariation <= 0) {
+            try {
+                $start = Carbon::parse($check_in_date);
+                $end = Carbon::parse($check_out_date);
+                $hasWeekend = false;
+                for ($d = $start->copy(); $d->lte($end); $d->addDay()) {
+                    if ($d->isSaturday() || $d->isSunday()) {
+                        $hasWeekend = true;
+                        break;
+                    }
+                }
+                if ($hasWeekend) {
+                    $rw = RoomWeekendModel::first();
+                    if ($rw && $rw->weekend_price_variation !== null) {
+                        $weekendVariation = (float)$rw->weekend_price_variation;
+                    }
+                }
+            } catch (\Throwable $e) {
+                // ignore
             }
         }
 
-        return true;
+        return [
+            'status' => $status,
+            'message' => $message,
+            'available_rooms' => $availableRoomsCount,
+            'pet_size_availability' => $petSizeAvailability,
+            'reserved_counts_by_room' => $reservedCountsByRoom,
+            'pet_size_availability_by_room' => $petSizeAvailabilityByRoom,
+            'selected_pet_size_counts' => $selectedPetSizeCounts,
+            'selected_sizes_ok_by_size' => $selectedSizesOkBySize,
+            'peak_price_variation' => $peakVariation,
+            'weekend_price_variation' => $weekendVariation,
+            'price_variation' => $peakVariation > 0 ? $peakVariation : $weekendVariation,
+        ];
     }
 }

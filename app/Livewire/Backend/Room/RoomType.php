@@ -4,14 +4,18 @@ namespace App\Livewire\Backend\Room;
 
 use Livewire\Component;
 use Livewire\WithPagination;
+use Livewire\WithFileUploads;
 use App\Models\Room\RoomTypeModel;
-use App\Models\Room\RoomPriceOptionModel;
+use Illuminate\Support\Facades\Storage;
 use App\Models\Species as SpeciesModel;
 use App\Models\Product as ProductModel;
+use App\Services\ImageService;
+use App\Rules\RoomTypeRules;
+use Illuminate\Support\Str;
 
 class RoomType extends Component
 {
-    use WithPagination;
+    use WithPagination, WithFileUploads;
 
     // UI State
     public $showForm = false;
@@ -56,9 +60,7 @@ class RoomType extends Component
         ['content' => '', 'document' => null]
     ];
 
-    public $price_options = [
-        ['label' => '', 'no_of_days' => '', 'price' => '']
-    ];
+    // Removed price_options from this form; pricing managed elsewhere
   
     // Image preview properties
     public $imagePreviews = [];
@@ -143,7 +145,7 @@ class RoomType extends Component
         $this->aggreed_terms = [];
         $this->evaluation_required = false;
         $this->aggreed_terms = [['content' => '', 'document' => null]];
-        $this->price_options = [['label' => '', 'no_of_days' => '', 'price' => '']];
+        // pricing options removed
         $this->seo_title = null;
         $this->seo_description = null;
         $this->seo_keywords = null;
@@ -177,7 +179,7 @@ class RoomType extends Component
         $this->seo_title = null;
         $this->seo_description = null;
         $this->seo_keywords = null;
-        $this->price_options = [['label' => '', 'no_of_days' => '', 'price' => '']];
+        // pricing options removed
     }
 
     /**
@@ -258,22 +260,7 @@ class RoomType extends Component
             $this->aggreed_terms = [['content' => '', 'document' => null]];
         }
         
-        // Load price options from room_price_options table
-        $priceOptions = RoomPriceOptionModel::where('room_type_id', $roomType->id)
-            ->where('status', 'active')
-            ->get();
-        
-        if ($priceOptions->count() > 0) {
-            $this->price_options = $priceOptions->map(function($option) {
-                return [
-                    'label' => $option->label,
-                    'no_of_days' => $option->no_of_days,
-                    'price' => $option->price
-                ];
-            })->toArray();
-        } else {
-            $this->price_options = [['label' => '', 'no_of_days' => '', 'price' => '']];
-        }
+        // price options are managed in a separate screen; nothing to load here
         
         // Load service addons - ensure it's an array
         if (is_array($roomType->service_addons)) {
@@ -445,23 +432,14 @@ class RoomType extends Component
      * Add a new price option to the component
      * @return void
      */
-    public function addPriceOption()
-    {
-        $this->price_options[] = ['label' => '', 'no_of_days' => '', 'price' => ''];
-    }
+    // addPriceOption removed
     
     /**
      * Remove a price option from the component
      * @param int $index
      * @return void
      */
-    public function removePriceOption($index)
-    {
-        if (count($this->price_options) > 1) {
-            unset($this->price_options[$index]);
-            $this->price_options = array_values($this->price_options);
-        }
-    }
+    // removePriceOption removed
     
     // Image management methods
     /**
@@ -732,7 +710,7 @@ class RoomType extends Component
     public function saveRoomType()
     {
 
-        $this->validate(\App\Rules\RoomTypeRules::rules($this->room_type_id));
+        $this->validate(RoomTypeRules::rules($this->room_type_id));
         
         try {
             // Handle image uploads with primary flag
@@ -740,11 +718,11 @@ class RoomType extends Component
             if ($this->images) {
                 foreach ($this->images as $index => $image) {
 
-                    if (!empty($image) && Storage::disk('do_spaces')->exists($image->getClientOriginalName())) {
-                        Storage::disk('do_spaces')->delete($image->getClientOriginalName());
+                    if (!empty($image) && Storage::disk('do_spaces')->exists($image)) {
+                        Storage::disk('do_spaces')->delete($image);
                     }
                     // Upload new one
-                    $path = $image->getClientOriginalName()->store('room_types', 'do_spaces');
+                    $path = $image->store('room_types', 'do_spaces');
                     $imageUrls[] = [
                         'url' => ImageService::getPublicUrl($path),
                         'primary' => isset($this->imagePrimary[$index]) ? (bool)$this->imagePrimary[$index] : false
@@ -796,21 +774,7 @@ class RoomType extends Component
                 'created_by' => auth()->id(),
             ]);
             
-            // Handle price options - insert into room_price_options table
-            if (!empty($this->price_options)) {
-                foreach ($this->price_options as $option) {
-                    if (!empty($option['label']) && !empty($option['no_of_days']) && !empty($option['price'])) {
-                        RoomPriceOptionModel::create([
-                            'room_type_id' => $roomType->id,
-                            'label' => $option['label'],
-                            'no_of_days' => $option['no_of_days'],
-                            'price' => $option['price'],
-                            'status' => 'active',
-                            'created_by' => auth()->id(),
-                        ]);
-                    }
-                }
-            }
+            // Price options are persisted via dedicated pages - no handling here
             
             // Show success message using session flash
             session()->flash('success', 'Room Type has been successfully created!');
@@ -949,25 +913,7 @@ class RoomType extends Component
                 'updated_by' => auth()->id(),
             ]);
             
-            // Handle price options - update room_price_options table
-            // First, delete existing price options for this room type
-            RoomPriceOptionModel::where('room_type_id', $roomType->id)->delete();
-            
-            // Then insert new price options
-            if (!empty($this->price_options)) {
-                foreach ($this->price_options as $option) {
-                    if (!empty($option['label']) && !empty($option['no_of_days']) && !empty($option['price'])) {
-                        RoomPriceOptionModel::create([
-                            'room_type_id' => $roomType->id,
-                            'label' => $option['label'],
-                            'no_of_days' => $option['no_of_days'],
-                            'price' => $option['price'],
-                            'status' => 'active',
-                            'created_by' => auth()->id(),
-                        ]);
-                    }
-                }
-            }
+            // Price options are managed elsewhere; skip updating here
             
             // Show success message using session flash
             session()->flash('success', 'Room Type has been successfully updated!');

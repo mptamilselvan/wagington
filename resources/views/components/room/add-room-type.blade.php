@@ -320,19 +320,20 @@
             </div>
 
       </div>
-     <div class="flex items-center justify-between px-2 py-4">
+    <div class="bg-gray-50 border border-gray-200 rounded-xl shadow-sm px-4 py-4 mb-6">
+        <div class="flex items-center justify-between">
                     <h3 class="text-lg font-medium text-gray-900">Agreed Terms</h3>
                     <button 
                         type="button" 
                         wire:click="addAgreedTerm"
-                        class="px-4 py-2 text-blue-600 hover:text-blue-800  rounded-lg hover:bg-blue-50 flex items-center gap-2"
+                class="px-4 py-2 text-blue-600 hover:text-blue-800  rounded-lg hover:bg-blue-50 flex items-center gap-2"
                     >
                         <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                             <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 4v16m8-8H4"></path>
                         </svg>
                         Add more
                     </button>
-                </div>
+        </div>
                 
                 @foreach($aggreed_terms as $index => $term)
                 <div class="grid grid-cols-1 gap-6 mb-6 md:grid-cols-2" wire:key="agreed-term-{{ $index }}">
@@ -417,79 +418,6 @@
                 </div>
                 @endforeach
 
-     <!-- Price Options Section -->
-     <div class="bg-gray-50 border border-gray-200 rounded-lg shadow-sm p-6 mb-6">
-         <div class="flex items-center justify-between px-2 py-4 border-b border-gray-200 mb-6">
-             <h3 class="text-lg font-medium text-gray-900">Price Options</h3>
-             <button 
-                 type="button" 
-                 wire:click="addPriceOption"
-                 class="px-4 py-2 text-blue-600 hover:text-blue-800 border border-blue-300 rounded-lg hover:bg-blue-50 flex items-center gap-2 transition-colors"
-             >
-                 <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                     <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 4v16m8-8H4"></path>
-                 </svg>
-                 Add more
-             </button>
-         </div>
-        
-        @foreach($price_options as $index => $option)
-        <div class="grid grid-cols-4 gap-6 mb-6 md:grid-cols-4" wire:key="price-option-{{ $index }}">
-            <!-- Label -->
-            <div>
-                <label class="block mb-2 text-sm font-normal text-gray-700">Label*</label>
-                <input 
-                    type="text" 
-                    wire:model.live="price_options.{{ $index }}.label"
-                    placeholder="Enter label"
-                    class="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent"
-                >
-                @error('price_options.'.$index.'.label') <span class="text-sm text-red-500">{{ $message }}</span> @enderror
-            </div>
-
-            <!-- No. of days -->
-            <div>
-                <label class="block mb-2 text-sm font-normal text-gray-700">No. of days*</label>
-                <input 
-                    type="text" 
-                    wire:model.live="price_options.{{ $index }}.no_of_days"
-                    placeholder="Enter no. of days"
-                    class="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent"
-                >
-                @error('price_options.'.$index.'.no_of_days') <span class="text-sm text-red-500">{{ $message }}</span> @enderror
-            </div>
-
-            <!-- Price -->
-            <div>
-                <label class="block mb-2 text-sm font-normal text-gray-700">Price (SGD)*</label>
-                <input 
-                    type="text" 
-                    wire:model.live="price_options.{{ $index }}.price"
-                    placeholder="Enter price"
-                    class="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent"
-                >
-                @error('price_options.'.$index.'.price') <span class="text-sm text-red-500">{{ $message }}</span> @enderror
-            </div>
-
-            <!-- Remove button -->
-            <div>
-                <label class="block mb-2 text-sm font-normal text-gray-700">&nbsp;</label>
-                @if(isset($price_options) && is_array($price_options) && count($price_options) > 1)
-                    <button 
-                        type="button" 
-                        wire:click="removePriceOption({{ $index }})"
-                        class="px-3 py-2 text-red-600 hover:text-red-800 border border-red-300 rounded-lg hover:bg-red-50 transition-colors"
-                        title="Remove this price option"
-                    >
-                        <svg class="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M19 7l-.867 12.142A2 2 0 0116.138 21H7.862a2 2 0 01-1.995-1.858L5 7m5 4v6m4-6v6m1-10V4a1 1 0 00-1-1h-4a1 1 0 00-1 1v3M4 7h16"></path>
-                        </svg>
-                    </button>
-                @endif
-            </div>
-        </div>
-        @endforeach
-     </div>
             
         <div class="grid grid-cols-1 gap-6 mb-6 md:grid-cols-2">
             

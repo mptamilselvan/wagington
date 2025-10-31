@@ -200,25 +200,6 @@ class RoomTypeRules
                         $fail('Content is required when a document is uploaded.');
                     }
                 },
-            ],
-            'price_options'   => [
-                'nullable',
-                'array',
-            ],
-            'price_options.*.label'   => [
-                'nullable',
-                'string',
-                'max:50',
-            ],
-            'price_options.*.no_of_days'   => [
-                'required_with:label',
-                'numeric',
-                'min:0',
-            ],
-            'price_options.*.price'   => [
-                'required_with:label,no_of_days',
-                'numeric',
-                'min:0',
             ]
         ];
     }
@@ -277,18 +258,7 @@ class RoomTypeRules
             'aggreed_terms.*.document.mimes' => 'Aggreed terms document must be a pdf.',
             'aggreed_terms.*.document.max' => 'Aggreed terms document must be less than 25600 kilobytes (25MB).',
             'aggreed_terms.*.document.required_with' => 'Aggreed terms document is nullable when content is present.',
-            'aggreed_terms.*.document.required' => 'Aggreed terms document is nullable.',
-            'price_options.nullable' => 'Price options are optional.',
-            'price_options.array' => 'Price options must be an array.',
-            'price_options.*.duration.required_with' => 'Duration is required when price options are provided.',
-            'price_options.*.duration.string' => 'Duration must be a string.',
-            'price_options.*.duration.max' => 'Duration must not exceed 50 characters.',
-            'price_options.*.price.required_with' => 'Price is required when price options are provided.',
-            'price_options.*.price.numeric' => 'Price must be a number.',
-            'price_options.*.price.min' => 'Price must be greater than or equal to 0.',
-            'price_options.*.currency.required_with' => 'Currency is required when price options are provided.',
-            'price_options.*.currency.string' => 'Currency must be a string.',
-            'price_options.*.currency.max' => 'Currency must not exceed 10 characters.',
+            'aggreed_terms.*.document.required' => 'Aggreed terms document is nullable.'
         ];
     }
 }

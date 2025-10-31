@@ -147,6 +147,19 @@ class CouponService
             // Ensure percentage is within valid range
             $value = max(0, min(100, $value));
             $discount = ($subtotal * $value) / 100;
+        } elseif ($type === 'fixed') {
+            $discount = min($value, $subtotal); // Don't allow discount to exceed subtotal
+        }
+
+        // Ensure discount is not negative
+        $discount = max(0, $discount);
+
+        return $discount;
+    }
+
+    /**
+     * Increment voucher usage via API
+     */
     public function incrementVoucherUsage(int $voucherId, string $orderId): bool
     {
         try {
@@ -180,20 +193,6 @@ class CouponService
                 Log::error('CouponService: Failed to increment voucher usage', [
                     'voucher_id' => $voucherId,
                     'message' => $result['message'] ?? 'Unknown error'
-                ]);
-                return false;
-            }
-
-            return true;
-
-        } catch (\Exception $e) {
-            Log::error('CouponService: Exception while incrementing voucher usage', [
-                'error' => $e->getMessage(),
-                'voucher_id' => $voucherId
-            ]);
-            return false;
-        }
-    }
                 ]);
                 return false;
             }

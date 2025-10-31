@@ -10,10 +10,18 @@ use Illuminate\Support\Facades\Auth;
 use App\Services\ImageService;
 use App\Models\Room\RoomTypeModel;
 use App\Services\Frontend\Room\RoomService;
+use App\Models\Room\RoomPriceOptionModel;
+use Carbon\Carbon;
+// removed duplicate Pet import
+use App\Models\Size;
 class PopBook extends Component
 {
     public $room = null;
     protected ?RoomService $roomService = null;
+    public ?string $availabilityMessage = null;
+    public ?string $availabilityType = null; // 'success' | 'error'
+    public $availabilityDetails = null; // ['available_rooms'=>int, 'pet_size_availability'=>[]]
+    public $quote = null; // pricing summary when available
     public $booking = null;
     public $room_type_id = null;
     // Pet selection properties
@@ -34,6 +42,7 @@ class PopBook extends Component
     public $agreementDocumentUrl = null;
     public $agreementContent = null;
     public $aggreed_terms = [];
+    public $agreeDocs = []; // checkbox states per agreement term index
 
     // Date selection
     public $start_date = null; // Y-m-d
@@ -46,6 +55,7 @@ class PopBook extends Component
         $this->loadPets();
         $this->loadAddons();
         $this->roomService = new RoomService();
+        $this->loadAgreements();
     }
 
     public function refreshBooking()
@@ -56,11 +66,17 @@ class PopBook extends Component
 
     public function loadAgreements()
     {
-        if (!$this->room || !$this->room->room_type_id) {
+        $roomTypeId = null;
+        if ($this->room && $this->room->room_type_id) {
+            $roomTypeId = $this->room->room_type_id;
+        } elseif ($this->room_type_id) {
+            $roomTypeId = $this->room_type_id;
+        }
+        if (!$roomTypeId) {
             return;
         }
 
-        $roomType = RoomTypeModel::where('id', $this->room->room_type_id)->first();
+        $roomType = RoomTypeModel::where('id', $roomTypeId)->first();
         
         if (!$roomType || !$roomType->aggreed_terms) {
             return;
@@ -70,11 +86,12 @@ class PopBook extends Component
         
         if (is_array($this->aggreed_terms) && count($this->aggreed_terms) > 0) {
             $firstTerm = $this->aggreed_terms[0];
-            if (isset($firstTerm['document_url'])) {
-                $this->agreementDocumentUrl = $firstTerm['document_url'];
-            }
-            if (isset($firstTerm['content'])) {
-                $this->agreementContent = $firstTerm['content'];
+            $this->agreementDocumentUrl = $firstTerm['document_url'] ?? $this->agreementDocumentUrl;
+            $this->agreementContent = $firstTerm['content'] ?? $this->agreementContent;
+            // initialize checkbox states for all terms
+            $this->agreeDocs = [];
+            foreach ($this->aggreed_terms as $idx => $t) {
+                $this->agreeDocs[$idx] = false;
             }
         }
     }
@@ -194,21 +211,163 @@ class PopBook extends Component
 
     public function checkAvailability()
     {
+        if ($this->roomService === null) {
+            $this->roomService = new RoomService();
+        }
+        // reset inline message
+        $this->availabilityMessage = null;
+        $this->availabilityType = null;
+        $this->availabilityDetails = null;
+        $this->quote = null;
+        if (empty($this->selectedPets)) {
+            $this->dispatch('notify', message: 'Please select at least one pet', type: 'error');
+            $this->availabilityMessage = 'Please select at least one pet';
+            $this->availabilityType = 'error';
+            return;
+        }
         if (!$this->room_type_id) {
             $this->dispatch('notify', message: 'Room type is not selected', type: 'error');
+            $this->availabilityMessage = 'Room type is not selected';
+            $this->availabilityType = 'error';
             return;
         }
         $this->validate([
             'start_date' => 'required|date',
             'end_date' => 'required|date|after_or_equal:start_date',
         ]);
-        $isAvailable = $this->roomService->checkRoomAvailability($this->room_type_id, $this->start_date, $this->end_date);
-        if (!$isAvailable) {
-            $this->dispatch('notify', message: 'Room is not available for the selected dates', type: 'error');
+        $resp = $this->roomService->checkRoomAvailability($this->room_type_id, $this->start_date, $this->end_date, $this->selectedPets);
+        if (!is_array($resp)) {
+            $this->dispatch('notify', message: 'Unable to check availability', type: 'error');
+            $this->availabilityMessage = 'Unable to check availability';
+            $this->availabilityType = 'error';
             return;
-        }else{
-            $this->dispatch('notify', message: 'Room is available for the selected dates', type: 'success');
         }
+
+        $status = (bool)($resp['status'] ?? false);
+        $message = (string)($resp['message'] ?? ($status ? 'Room is available' : 'Room is not available for the selected dates'));
+        $this->availabilityDetails = [
+            'available_rooms' => (int)($resp['available_rooms'] ?? 0),
+            'pet_size_availability' => $resp['pet_size_availability'] ?? [],
+            'selected_pet_size_counts' => $resp['selected_pet_size_counts'] ?? [],
+            'selected_sizes_ok_by_size' => $resp['selected_sizes_ok_by_size'] ?? [],
+            'price_variation' => (float)($resp['price_variation'] ?? 0),
+        ];
+
+        if (!$status) {
+            $this->dispatch('notify', message: $message, type: 'error');
+            $this->availabilityMessage = $message;
+            $this->availabilityType = 'error';
+            return;
+        }
+
+        $this->dispatch('notify', message: $message, type: 'success');
+        $this->availabilityMessage = $message;
+        $this->availabilityType = 'success';
+
+        // Build pricing summary based on selected pet sizes and number of days
+        $days = 1;
+        try {
+            $sd = Carbon::parse($this->start_date);
+            $ed = Carbon::parse($this->end_date);
+            $diff = $sd && $ed ? $sd->diffInDays($ed) : 0;
+            $days = max(1, (int)$diff);
+        } catch (\Throwable $e) {
+            $days = 1;
+        }
+        $selectedPets = Pet::whereIn('id', $this->selectedPets)->get(['id','name','pet_size_id']);
+        $selectedSizeIds = $selectedPets->pluck('pet_size_id')->filter()->map(fn($v) => (int)$v)->toArray();
+        $baseSubtotal = 0.0; // before variation
+        $finalSubtotal = 0.0; // after variation
+        $variationTotal = 0.0;
+        $petLines = [];
+        if (!empty($selectedSizeIds)) {
+            $prices = RoomPriceOptionModel::where('room_type_id', (int)$this->room_type_id)
+                ->whereIn('pet_size_id', $selectedSizeIds)
+                ->where('no_of_days', $days)
+                ->get(['pet_size_id','price']);
+            // Fallback set for 1-day price if exact days not configured
+            $prices1d = collect();
+            if ($days !== 1) {
+                $prices1d = RoomPriceOptionModel::where('room_type_id', (int)$this->room_type_id)
+                    ->whereIn('pet_size_id', $selectedSizeIds)
+                    ->where('no_of_days', 1)
+                    ->get(['pet_size_id','price']);
+            }
+            $sizeMap = Size::whereIn('id', $selectedSizeIds)->get(['id','name'])->keyBy('id');
+            $ppv = (float)($resp['price_variation'] ?? ($resp['peak_price_variation'] ?? 0));
+            foreach ($selectedPets as $pet) {
+                $sid = (int)$pet->pet_size_id;
+                $sizeName = optional($sizeMap->get($sid))->name;
+                $row = $prices->firstWhere('pet_size_id', $sid);
+                $base = (float)($row->price ?? 0);
+                if ($base <= 0 && $days > 1 && $prices1d->isNotEmpty()) {
+                    $row1 = $prices1d->firstWhere('pet_size_id', $sid);
+                    $base = (float)($row1->price ?? 0) * $days;
+                }
+                // Additional fallbacks if still zero: use any price for room_type
+                if ($base <= 0) {
+                    $rowDays = RoomPriceOptionModel::where('room_type_id', (int)$this->room_type_id)
+                        ->where('no_of_days', $days)
+                        ->orderByDesc('price')
+                        ->first(['price']);
+                    if ($rowDays && (float)$rowDays->price > 0) {
+                        $base = (float)$rowDays->price;
+                    }
+                }
+                if ($base <= 0) {
+                    $rowAny = RoomPriceOptionModel::where('room_type_id', (int)$this->room_type_id)
+                        ->orderByDesc('no_of_days')
+                        ->orderByDesc('price')
+                        ->first(['price','no_of_days']);
+                    if ($rowAny && (float)$rowAny->price > 0) {
+                        // Scale proportionally by days if we have a 1-day price; otherwise use as-is
+                        $base = (int)($rowAny->no_of_days ?? 1) === 1 ? ((float)$rowAny->price * $days) : (float)$rowAny->price;
+                    }
+                }
+                $final = $base;
+                if ($ppv > 0 && $base > 0) {
+                    $final = $base + (($base * $ppv) / 100.0);
+                }
+                $baseSubtotal += $base;
+                $finalSubtotal += $final;
+                $variationTotal += max(0, $final - $base);
+                $petLines[] = [
+                    'pet_id' => (int)$pet->id,
+                    'pet_name' => (string)$pet->name,
+                    'pet_size_id' => $sid,
+                    'pet_size_name' => $sizeName,
+                    'base_price' => $base,
+                    'variation_percent' => $ppv,
+                    'variation_amount' => max(0, $final - $base),
+                    'final_price' => $final,
+                ];
+            }
+        }
+        $addonsTotal = 0.0;
+        $addonLines = [];
+        foreach ($this->selectedAddons as $ad) {
+            $line = ((float)($ad['price'] ?? 0)) * ((int)($ad['qty'] ?? 1));
+            $addonsTotal += $line;
+            $addonLines[] = [
+                'name' => $ad['name'] ?? 'Addon',
+                'qty' => (int)($ad['qty'] ?? 1),
+                'price' => (float)($ad['price'] ?? 0),
+                'total' => $line,
+            ];
+        }
+        $roomName = optional(RoomTypeModel::find($this->room_type_id))->name;
+        $this->quote = [
+            'room_name' => $roomName,
+            'pet_quantity' => count($this->selectedPets ?? []),
+            'days' => $days,
+            'base_total' => $baseSubtotal,
+            'variation_total' => $variationTotal,
+            'final_subtotal' => $finalSubtotal,
+            'addons_total' => $addonsTotal,
+            'total' => $finalSubtotal + $addonsTotal,
+            'pet_lines' => $petLines,
+            'addon_lines' => $addonLines,
+        ];
     }
     public function render()
     {
