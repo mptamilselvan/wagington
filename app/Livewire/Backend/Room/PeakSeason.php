@@ -10,18 +10,17 @@ use App\Models\Room\PeakSeasonModel;
 class PeakSeason extends Component
 {
 
-    public $title, $description, $start_date, $end_date, $peak_price_variation, $weekend_price_variation;
+    public $title, $description, $start_date, $end_date, $peak_price_variation;
     public $peakSeason;
     public $editId = null, $deleteId = null;
 
-    public  $popUp = false, $page_title = 'General Settings';
+    public  $popUp = false, $page_title = 'Room Settings';
 
     protected $rules = [
         'title' => 'required|string',
         'start_date' => 'required|date',
         'end_date' => 'required|date|after_or_equal:start_date',
         'peak_price_variation' => 'required|numeric',
-        'weekend_price_variation' => 'required|numeric',
         'description' => 'nullable|string',
     ];
 
@@ -54,7 +53,29 @@ class PeakSeason extends Component
         $this->validate();
 
         try {
-            $data = $this->only(['title', 'start_date', 'end_date', 'description','peak_price_variation', 'weekend_price_variation']);
+            // Prevent overlapping date ranges with existing peak seasons
+            $start = $this->start_date;
+            $end = $this->end_date;
+            $overlaps = PeakSeasonModel::where(function($q) use ($start, $end) {
+                    $q->whereBetween('start_date', [$start, $end])
+                      ->orWhereBetween('end_date', [$start, $end])
+                      ->orWhere(function($qq) use ($start, $end) {
+                          $qq->where('start_date', '<=', $start)
+                             ->where('end_date', '>=', $end);
+                      });
+                })
+                ->when($this->editId, function($q) {
+                    $q->where('id', '!=', $this->editId);
+                })
+                ->exists();
+
+            if ($overlaps) {
+                $this->addError('start_date', 'The selected date range overlaps an existing peak season.');
+                session()->flash('error', 'Date range overlaps with an existing peak season.');
+                return;
+            }
+
+            $data = $this->only(['title', 'start_date', 'end_date', 'description','peak_price_variation']);
             $data['created_by'] = Auth::user()->id;
 
 
@@ -65,6 +86,7 @@ class PeakSeason extends Component
             }
 
             $this->resetFields();
+            session()->flash('success', 'Peak season saved successfully.');
         } catch (Exception $e) {
             $e->getMessage();
         }
@@ -79,7 +101,6 @@ class PeakSeason extends Component
             $this->start_date = $peakSeason->start_date->format('Y-m-d');
             $this->end_date = $peakSeason->end_date->format('Y-m-d');
             $this->peak_price_variation = $peakSeason->peak_price_variation;
-            $this->weekend_price_variation = $peakSeason->weekend_price_variation;
             $this->description = $peakSeason->description;
         } catch (Exception $e) {
             $e->getMessage();
@@ -105,6 +126,6 @@ class PeakSeason extends Component
 
     public function resetFields()
     {
-        $this->reset(['title', 'description', 'start_date', 'end_date', 'editId','peak_price_variation', 'weekend_price_variation']);
+        $this->reset(['title', 'description', 'start_date', 'end_date', 'editId','peak_price_variation']);
     }
 }

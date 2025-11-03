@@ -18,7 +18,7 @@ class CancelSetting extends Component
 {
     protected $cancelSettingService;
 
-    public $title = 'Room Cancel Setting', $popUp = false;
+    public $title = 'Room Settings', $popUp = false;
 
     public $before_6_hour_percentage, $before_24_hour_percentage, $before_72_hour_percentage, $admin_cancel_percentage, $editId = 0, $deleteId;
 

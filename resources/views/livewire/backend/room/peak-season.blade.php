@@ -68,17 +68,6 @@
                             ])
                         @endcomponent
                     </div>
-                    <div class="mt-2">
-                        @component('components.textbox-component', [
-                            'wireModel' => 'weekend_price_variation',
-                            'id' => 'weekend_price_variation',
-                            'label' => 'Weekend Price % Increase',
-                            'star' => true,
-                            'placeholder' => 'Weekend Price % Increase',
-                            'error' => $errors->first('weekend_price_variation'),
-                            ])
-                        @endcomponent
-                    </div>
                 </div>
                 <div>
                     @component('components.textarea-component', [
@@ -123,7 +112,6 @@
                             <th class="th">Start Date</th>
                             <th class="th">End Date</th>
                             <th class="th">Peak Price % Increase</th>
-                            <th class="th">Weekend Price % Increase</th>
                             <th class="th">Description</th>
                             <th class="th"></th>
                         </tr>
@@ -136,7 +124,6 @@
                                 <td class="td">{{ $peak_season->start_date->format('M d, Y') }}</td>
                                 <td class="td">{{ $peak_season->end_date->format('M d, Y') }}</td>
                                 <td class="td">{{ $peak_season->peak_price_variation }}</td>
-                                <td class="td">{{ $peak_season->weekend_price_variation }}</td>
                                 <td class="td">{{ Str::limit($peak_season->description, 20) }}</td>
                                 <td class="td">
                                     @component('components.three-dots-trigger', [

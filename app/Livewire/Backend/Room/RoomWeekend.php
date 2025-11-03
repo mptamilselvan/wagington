@@ -18,7 +18,7 @@ class RoomWeekend extends Component
 {
     protected $roomSettingService;
 
-    public $heading = 'Room Weekend', $popUp = false;
+    public $heading = 'Room Settings', $popUp = false;
 
     public $title, $description, $weekend_price_variation, $editId = 0, $deleteId;
 

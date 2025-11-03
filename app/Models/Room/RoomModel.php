@@ -49,5 +49,8 @@ class RoomModel extends Model
         return $this->hasMany(PetSizeLimitModel::class,'room_type_id');
     }
 
-
+    public function getPrimaryImage()
+    {
+        return $this->roomType->getPrimaryImageUrl();
+    }
 }

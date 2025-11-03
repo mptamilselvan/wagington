@@ -20,7 +20,7 @@ class PetSizeLimitSetting extends Component
 {
     protected $petSizeLimitSettingService;
 
-    public $title = 'Pet Size Limit Setting', $popUp = false;
+    public $title = 'Room Settings', $popUp = false;
 
     // Room type and species selection
     public $room_type_id = null;

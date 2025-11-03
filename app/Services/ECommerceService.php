@@ -1649,6 +1649,7 @@ class ECommerceService
     {
         $sessionItems = [];
         foreach ($dbItems as $ci) {
+            if($ci->catalog_id != 1) continue; // only sync catalog 1 items
             $variant = $ci->variant;
             if (!$variant) continue;
             $price = (float) $variant->selling_price;
@@ -1702,6 +1703,7 @@ class ECommerceService
 
             $sessionItems[$itemId] = [
                 'id' => $itemId,
+                'catalog_id' => 1,
                 'variant_id' => $variant->id,
                 'product_id' => $variant->product_id,
                 'name' => optional($variant->product)->name,
@@ -1724,6 +1726,47 @@ class ECommerceService
             ];
         }
 
+        // Sync for room booking items
+        
+        foreach ($dbItems as $ci) {
+            if($ci->catalog_id != 2) continue; // only sync catalog 2 items
+
+            $roomDetails = $ci->roomDetails;
+            if (!$roomDetails) continue;
+            //$room = $ci->room;
+            //if (!$room) continue;
+            
+            // Get primary image for the cart item (ensure URL via ImageService)
+            $primaryImage = $roomDetails->room ? $roomDetails->room->getPrimaryImage() : null;
+            $imageUrl = $primaryImage ? (is_string($primaryImage) ? $primaryImage : (\App\Services\ImageService::getImageUrl($primaryImage))) : null;
+
+
+
+            $itemId = $idPrefix . $roomDetails->id; // deterministic id mapping for session snapshot
+
+            $sessionItems[$itemId] = [
+                'id' => $itemId,
+                'catalog_id' => 2,
+                'image_url' => $imageUrl,
+                'variant_id' => null,
+                'product_id' => null,
+                'name' => $roomDetails->room->name,
+                'variant_display_name' => null,
+                'qty' => (int)$roomDetails->pet_quantity,
+                'unit_price' => $roomDetails->room_price,
+                'subtotal' => $roomDetails->room_price * (int)$roomDetails->pet_quantity,
+                'compare_price' => null,
+                'discount_percent' => 0,
+                'saved_amount' => 0,
+                'addons' => $roomDetails->service_addons,
+                'pets' => $roomDetails->pets_reserved,
+                'shippable' => false,
+                'availability_status' => 'in_stock',
+                'is_backorder' => false,
+                'backorder_qty' => 0,
+            ];
+        }
+
         Session::put('cart.items', $sessionItems);
         $this->recalculateCartTotal();
     }
@@ -1731,10 +1774,9 @@ class ECommerceService
     // Sync session snapshot from DB for authenticated user
     private function syncSessionFromDb(int $userId): void
     {
-        $dbItems = CartItem::with(['variant.product', 'variant.mediaAssets', 'addons.variant.product', 'addons.variant.mediaAssets'])
+        $dbItems = CartItem::with(['variant.product', 'variant.mediaAssets', 'addons.variant.product', 'addons.variant.mediaAssets', 'room', 'roomDetails'])
             ->where('user_id', $userId)
             ->get();
-
         $this->syncSessionFromDbItems($dbItems, 'db_');
     }
 

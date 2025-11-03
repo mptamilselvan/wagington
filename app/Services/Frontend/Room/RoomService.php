@@ -23,6 +23,8 @@ use App\Models\Room\RoomModel;
 use App\Models\Room\PetSizeLimitModel;
 use App\Models\Room\PeakSeasonModel;
 use App\Models\Room\RoomWeekendModel;
+use App\Models\Room\OffDayModel;
+use App\Models\Room\RoomPriceOptionModel;
 use Carbon\Carbon;
 use App\Models\Pet;
 use App\Models\Size;
@@ -488,10 +490,39 @@ class RoomService
             }
         }
 
+        // If no peak and no weekend, check Off Day overlap
+        $offDayVariation = 0.0;
+        if ($peakVariation <= 0 && $weekendVariation <= 0) {
+            try {
+                $offOverlap = OffDayModel::where(function($q) use ($check_in_date, $check_out_date) {
+                        $q->whereBetween('start_date', [$check_in_date, $check_out_date])
+                          ->orWhereBetween('end_date', [$check_in_date, $check_out_date])
+                          ->orWhere(function($qq) use ($check_in_date, $check_out_date) {
+                              $qq->where('start_date', '<=', $check_in_date)
+                                 ->where('end_date', '>=', $check_out_date);
+                          });
+                    })
+                    ->orderByDesc('off_day_price_variation')
+                    ->first();
+                if ($offOverlap && $offOverlap->off_day_price_variation !== null) {
+                    $offDayVariation = (float)$offOverlap->off_day_price_variation;
+                }
+            } catch (\Throwable $e) {
+                // ignore
+            }
+        }
+
+        // If room is not available, check alternative room types
+        $alternativeRoomTypes = [];
+        if (!$status) {
+            $alternativeRoomTypes = $this->findAlternativeRoomTypes($room_type_id, $check_in_date, $check_out_date, $selected_pet_ids);
+        }
+
         return [
             'status' => $status,
             'message' => $message,
             'available_rooms' => $availableRoomsCount,
+            'available_room_ids' => isset($availableIdsArray) ? $availableIdsArray : [],
             'pet_size_availability' => $petSizeAvailability,
             'reserved_counts_by_room' => $reservedCountsByRoom,
             'pet_size_availability_by_room' => $petSizeAvailabilityByRoom,
@@ -499,7 +530,424 @@ class RoomService
             'selected_sizes_ok_by_size' => $selectedSizesOkBySize,
             'peak_price_variation' => $peakVariation,
             'weekend_price_variation' => $weekendVariation,
-            'price_variation' => $peakVariation > 0 ? $peakVariation : $weekendVariation,
+            'off_day_price_variation' => $offDayVariation,
+            'price_variation' => $peakVariation > 0 ? $peakVariation : ($weekendVariation > 0 ? $weekendVariation : $offDayVariation),
+            'alternative_room_types' => $alternativeRoomTypes,
+        ];
+    }
+
+    /**
+     * Find alternative room types that can accommodate the selected pets
+     */
+    private function findAlternativeRoomTypes($excludeRoomTypeId, $check_in_date, $check_out_date, array $selected_pet_ids)
+    {
+        if (empty($selected_pet_ids)) {
+            return [];
+        }
+
+        // Get pet sizes for selected pets
+        $selectedPets = Pet::whereIn('id', $selected_pet_ids)->get(['id', 'pet_size_id']);
+        $selectedSizeIds = $selectedPets->pluck('pet_size_id')->filter()->map(fn($v) => (int)$v)->unique()->toArray();
+        
+        if (empty($selectedSizeIds)) {
+            return [];
+        }
+
+        // Count pets by size
+        $petsBySize = [];
+        foreach ($selectedPets as $pet) {
+            if ($pet->pet_size_id) {
+                $sizeId = (int)$pet->pet_size_id;
+                $petsBySize[$sizeId] = ($petsBySize[$sizeId] ?? 0) + 1;
+            }
+        }
+
+        // Calculate number of days
+        try {
+            $start = Carbon::parse($check_in_date);
+            $end = Carbon::parse($check_out_date);
+            $days = max(1, (int)$start->diffInDays($end));
+        } catch (\Throwable $e) {
+            $days = 1;
+        }
+
+        // Get all other room types with rooms
+        $alternativeRoomTypes = RoomTypeModel::with(['rooms', 'roomPriceOptions', 'petsizeLimits', 'species'])
+            ->where('id', '!=', $excludeRoomTypeId)
+            ->whereHas('rooms', function($q) {
+                $q->where('status', RoomModel::STATUS_AVAILABLE);
+            })
+            ->get();
+
+        $availableAlternatives = [];
+
+        foreach ($alternativeRoomTypes as $altRoomType) {
+            // Check if this room type can accommodate the pet sizes
+            $limitsMap = [];
+            $limitRow = PetSizeLimitModel::where('room_type_id', $altRoomType->id)->first();
+            if ($limitRow && !empty($limitRow->allowed_pet_size)) {
+                $allowed = json_decode($limitRow->allowed_pet_size, true) ?: [];
+                foreach ($allowed as $entry) {
+                    if (is_array($entry) && isset($entry['pet_size_id']) && isset($entry['limit'])) {
+                        $limitsMap[(int)$entry['pet_size_id']] = (int)$entry['limit'];
+                    } elseif (is_array($entry)) {
+                        foreach ($entry as $sizeId => $limit) {
+                            $limitsMap[(int)$sizeId] = (int)$limit;
+                        }
+                    }
+                }
+            }
+
+            if (empty($limitsMap)) {
+                continue;
+            }
+
+            // Check if all required sizes are supported
+            $allSizesSupported = true;
+            foreach ($selectedSizeIds as $sizeId) {
+                if (!isset($limitsMap[$sizeId])) {
+                    $allSizesSupported = false;
+                    break;
+                }
+            }
+
+            if (!$allSizesSupported) {
+                continue;
+            }
+
+            // Check availability for this room type
+            $availabilityResult = $this->checkSingleRoomTypeAvailability(
+                $altRoomType->id,
+                $check_in_date,
+                $check_out_date,
+                $selected_pet_ids,
+                $petsBySize,
+                $days
+            );
+
+            if ($availabilityResult['available']) {
+                // Calculate pricing
+                $pricing = $this->calculateRoomTypePricing($altRoomType, $selected_pet_ids, $days, $availabilityResult['price_variation']);
+
+                $availableAlternatives[] = [
+                    'room_type_id' => $altRoomType->id,
+                    'room_type_name' => $altRoomType->name,
+                    'room_type_slug' => $altRoomType->slug,
+                    'available_rooms' => $availabilityResult['available_rooms'],
+                    'available_room_ids' => $availabilityResult['available_room_ids'],
+                    'rooms' => $availabilityResult['rooms'],
+                    'pricing' => $pricing,
+                    'pet_size_availability' => $availabilityResult['pet_size_availability'],
+                ];
+            }
+        }
+
+        return $availableAlternatives;
+    }
+
+    /**
+     * Check availability for a single room type (helper method)
+     */
+    private function checkSingleRoomTypeAvailability($room_type_id, $check_in_date, $check_out_date, array $selected_pet_ids, array $petsBySize, int $days)
+    {
+        // Get pet size limits
+        $limitsMap = [];
+        $limitRow = PetSizeLimitModel::where('room_type_id', $room_type_id)->first();
+        if ($limitRow && !empty($limitRow->allowed_pet_size)) {
+            $allowed = json_decode($limitRow->allowed_pet_size, true) ?: [];
+            foreach ($allowed as $entry) {
+                if (is_array($entry) && isset($entry['pet_size_id']) && isset($entry['limit'])) {
+                    $limitsMap[(int)$entry['pet_size_id']] = (int)$entry['limit'];
+                } elseif (is_array($entry)) {
+                    foreach ($entry as $sizeId => $limit) {
+                        $limitsMap[(int)$sizeId] = (int)$limit;
+                    }
+                }
+            }
+        }
+
+        if (empty($limitsMap)) {
+            return ['available' => false];
+        }
+
+        // Find overlapping bookings
+        $bookings = RoomBookingModel::where('room_type_id', $room_type_id)
+            ->where(function ($q) use ($check_in_date, $check_out_date) {
+                $q->whereBetween('check_in_date', [$check_in_date, $check_out_date])
+                  ->orWhereBetween('check_out_date', [$check_in_date, $check_out_date])
+                  ->orWhere(function ($qq) use ($check_in_date, $check_out_date) {
+                      $qq->where('check_in_date', '<=', $check_in_date)
+                         ->where('check_out_date', '>=', $check_out_date);
+                  });
+            })
+            ->get(['pets_reserved', 'id', 'room_id']);
+
+        $reservedRoomIds = collect($bookings)->pluck('room_id')->filter(fn($id) => !is_null($id))->unique()->values();
+
+        // Count reserved pets by size per room
+        $reservedCountsByRoom = [];
+        foreach ($bookings as $bk) {
+            if (empty($bk->pets_reserved)) {
+                continue;
+            }
+            $pets = is_string($bk->pets_reserved)
+                ? (json_decode($bk->pets_reserved, true) ?: [])
+                : (is_array($bk->pets_reserved) ? $bk->pets_reserved : []);
+            foreach ($pets as $p) {
+                if (is_array($p) && isset($p['pet_size_id'])) {
+                    $sid = (int)$p['pet_size_id'];
+                    $rid = $bk->room_id;
+                    if (!is_null($rid)) {
+                        if (!isset($reservedCountsByRoom[$rid])) {
+                            $reservedCountsByRoom[$rid] = [];
+                        }
+                        $reservedCountsByRoom[$rid][$sid] = ($reservedCountsByRoom[$rid][$sid] ?? 0) + 1;
+                    }
+                }
+            }
+        }
+
+        // Get available rooms
+        $rooms = RoomModel::where('room_type_id', $room_type_id)
+            ->where('status', RoomModel::STATUS_AVAILABLE)
+            ->get(['id', 'name']);
+
+        $availableRoomIds = [];
+        $roomsData = [];
+        $sizeIds = Size::whereIn('id', array_keys($limitsMap))->get()->keyBy('id');
+
+        foreach ($rooms as $room) {
+            $roomSizes = [];
+            $roomHasCapacity = false;
+
+            foreach ($petsBySize as $sizeId => $needed) {
+                $limit = $limitsMap[$sizeId] ?? 0;
+                $used = $reservedCountsByRoom[$room->id][$sizeId] ?? 0;
+                $remaining = max(0, $limit - $used);
+
+                $roomSizes[] = [
+                    'pet_size_id' => $sizeId,
+                    'pet_size_name' => $sizeIds->get($sizeId)?->name ?? 'Unknown',
+                    'limit' => $limit,
+                    'used' => $used,
+                    'remaining' => $remaining,
+                    'needed' => $needed,
+                ];
+
+                if ($remaining >= $needed) {
+                    $roomHasCapacity = true;
+                }
+            }
+
+            // Check if room is not reserved or has capacity
+            if (!in_array($room->id, $reservedRoomIds->toArray()) || $roomHasCapacity) {
+                $availableRoomIds[] = $room->id;
+                $roomsData[] = [
+                    'room_id' => $room->id,
+                    'room_name' => $room->name,
+                    'sizes' => $roomSizes,
+                ];
+            }
+        }
+
+        $available = count($availableRoomIds) > 0;
+
+        // Check price variations
+        $priceVariation = $this->calculatePriceVariation($check_in_date, $check_out_date);
+
+        // Build pet size availability summary
+        $petSizeAvailability = [];
+        foreach ($petsBySize as $sizeId => $needed) {
+            $limit = $limitsMap[$sizeId] ?? 0;
+            $totalLimit = $limit * count($availableRoomIds);
+            $totalUsed = 0;
+            foreach ($availableRoomIds as $rid) {
+                $totalUsed += ($reservedCountsByRoom[$rid][$sizeId] ?? 0);
+            }
+            $remaining = max(0, $totalLimit - $totalUsed);
+
+            $petSizeAvailability[] = [
+                'pet_size_id' => $sizeId,
+                'pet_size_name' => $sizeIds->get($sizeId)?->name ?? 'Unknown',
+                'limit' => $totalLimit,
+                'used' => $totalUsed,
+                'remaining' => $remaining,
+                'needed' => $needed,
+            ];
+        }
+
+        return [
+            'available' => $available,
+            'available_rooms' => count($availableRoomIds),
+            'available_room_ids' => $availableRoomIds,
+            'rooms' => $roomsData,
+            'pet_size_availability' => $petSizeAvailability,
+            'price_variation' => $priceVariation,
+        ];
+    }
+
+    /**
+     * Calculate price variation for dates
+     */
+    private function calculatePriceVariation($check_in_date, $check_out_date)
+    {
+        $peakVariation = 0.0;
+        $weekendVariation = 0.0;
+        $offDayVariation = 0.0;
+
+        try {
+            $overlap = PeakSeasonModel::where(function($q) use ($check_in_date, $check_out_date) {
+                    $q->whereBetween('start_date', [$check_in_date, $check_out_date])
+                      ->orWhereBetween('end_date', [$check_in_date, $check_out_date])
+                      ->orWhere(function($qq) use ($check_in_date, $check_out_date) {
+                          $qq->where('start_date', '<=', $check_in_date)
+                             ->where('end_date', '>=', $check_out_date);
+                      });
+                })
+                ->orderByDesc('peak_price_variation')
+                ->first();
+            if ($overlap && $overlap->peak_price_variation !== null) {
+                $peakVariation = (float)$overlap->peak_price_variation;
+            }
+        } catch (\Throwable $e) {
+            // ignore
+        }
+
+        if ($peakVariation <= 0) {
+            try {
+                $start = Carbon::parse($check_in_date);
+                $end = Carbon::parse($check_out_date);
+                $hasWeekend = false;
+                for ($d = $start->copy(); $d->lte($end); $d->addDay()) {
+                    if ($d->isSaturday() || $d->isSunday()) {
+                        $hasWeekend = true;
+                        break;
+                    }
+                }
+                if ($hasWeekend) {
+                    $rw = RoomWeekendModel::first();
+                    if ($rw && $rw->weekend_price_variation !== null) {
+                        $weekendVariation = (float)$rw->weekend_price_variation;
+                    }
+                }
+            } catch (\Throwable $e) {
+                // ignore
+            }
+        }
+
+        if ($peakVariation <= 0 && $weekendVariation <= 0) {
+            try {
+                $offOverlap = OffDayModel::where(function($q) use ($check_in_date, $check_out_date) {
+                        $q->whereBetween('start_date', [$check_in_date, $check_out_date])
+                          ->orWhereBetween('end_date', [$check_in_date, $check_out_date])
+                          ->orWhere(function($qq) use ($check_in_date, $check_out_date) {
+                              $qq->where('start_date', '<=', $check_in_date)
+                                 ->where('end_date', '>=', $check_out_date);
+                          });
+                    })
+                    ->orderByDesc('off_day_price_variation')
+                    ->first();
+                if ($offOverlap && $offOverlap->off_day_price_variation !== null) {
+                    $offDayVariation = (float)$offOverlap->off_day_price_variation;
+                }
+            } catch (\Throwable $e) {
+                // ignore
+            }
+        }
+
+        return $peakVariation > 0 ? $peakVariation : ($weekendVariation > 0 ? $weekendVariation : $offDayVariation);
+    }
+
+    /**
+     * Calculate pricing for a room type based on selected pets
+     */
+    private function calculateRoomTypePricing($roomType, array $selected_pet_ids, int $days, float $priceVariation)
+    {
+        $selectedPets = Pet::whereIn('id', $selected_pet_ids)->get(['id', 'name', 'pet_size_id']);
+        $selectedSizeIds = $selectedPets->pluck('pet_size_id')->filter()->map(fn($v) => (int)$v)->unique()->toArray();
+
+        $baseSubtotal = 0.0;
+        $finalSubtotal = 0.0;
+        $petLines = [];
+        $sizeMap = Size::whereIn('id', $selectedSizeIds)->get(['id', 'name'])->keyBy('id');
+
+        // Get prices for the number of days
+        $prices = RoomPriceOptionModel::where('room_type_id', $roomType->id)
+            ->whereIn('pet_size_id', $selectedSizeIds)
+            ->where('no_of_days', $days)
+            ->get(['pet_size_id', 'price']);
+
+        // Fallback to 1-day prices if exact days not configured
+        $prices1d = collect();
+        if ($days !== 1) {
+            $prices1d = RoomPriceOptionModel::where('room_type_id', $roomType->id)
+                ->whereIn('pet_size_id', $selectedSizeIds)
+                ->where('no_of_days', 1)
+                ->get(['pet_size_id', 'price']);
+        }
+
+        foreach ($selectedPets as $pet) {
+            $sid = (int)$pet->pet_size_id;
+            if (!$sid) continue;
+
+            $sizeName = $sizeMap->get($sid)?->name ?? 'Unknown';
+            $row = $prices->firstWhere('pet_size_id', $sid);
+            $base = (float)($row->price ?? 0);
+
+            // Fallback to 1-day price if needed
+            if ($base <= 0 && $days > 1 && $prices1d->isNotEmpty()) {
+                $row1 = $prices1d->firstWhere('pet_size_id', $sid);
+                $base = (float)($row1->price ?? 0) * $days;
+            }
+
+            // Additional fallbacks
+            if ($base <= 0) {
+                $rowDays = RoomPriceOptionModel::where('room_type_id', $roomType->id)
+                    ->where('no_of_days', $days)
+                    ->orderByDesc('price')
+                    ->first(['price']);
+                if ($rowDays && (float)$rowDays->price > 0) {
+                    $base = (float)$rowDays->price;
+                }
+            }
+
+            if ($base <= 0) {
+                $rowAny = RoomPriceOptionModel::where('room_type_id', $roomType->id)
+                    ->orderByDesc('no_of_days')
+                    ->orderByDesc('price')
+                    ->first(['price', 'no_of_days']);
+                if ($rowAny && (float)$rowAny->price > 0) {
+                    $base = (int)($rowAny->no_of_days ?? 1) === 1 ? ((float)$rowAny->price * $days) : (float)$rowAny->price;
+                }
+            }
+
+            $final = $base;
+            if ($priceVariation > 0 && $base > 0) {
+                $final = $base + (($base * $priceVariation) / 100.0);
+            }
+
+            $baseSubtotal += $base;
+            $finalSubtotal += $final;
+
+            $petLines[] = [
+                'pet_id' => (int)$pet->id,
+                'pet_name' => (string)$pet->name,
+                'pet_size_id' => $sid,
+                'pet_size_name' => $sizeName,
+                'base_price' => $base,
+                'variation_percent' => $priceVariation,
+                'variation_amount' => max(0, $final - $base),
+                'final_price' => $final,
+            ];
+        }
+
+        return [
+            'days' => $days,
+            'base_total' => $baseSubtotal,
+            'variation_total' => max(0, $finalSubtotal - $baseSubtotal),
+            'final_subtotal' => $finalSubtotal,
+            'total' => $finalSubtotal,
+            'pet_lines' => $petLines,
         ];
     }
 }

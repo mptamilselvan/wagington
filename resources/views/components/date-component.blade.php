@@ -7,7 +7,7 @@
         @endif
     </label>
     <div>
-        <input type="date" wire:model.defer="{{  $wireModel }}" name="{{ $wireModel }}" id="{{ $id }}"
+        <input type="date" wire:model{{ isset($live) && $live ? '.live' : '.defer' }}="{{  $wireModel }}" name="{{ $wireModel }}" id="{{ $id }}"
             @if (isset($placeholder)) placeholder="{{ $placeholder }}" @endif 
             @if (isset($wireClickFn)) wire:click="{{ $wireClickFn }}" @endif
              value="{{ $value ?? '' }}" autocomplete="given-name" 

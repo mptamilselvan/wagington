@@ -18,63 +18,118 @@
 
     <div class="space-y-4">
         @forelse($cart['items'] as $item)
-            <div wire:key="cart-item-{{ $item['id'] }}" class="flex items-center justify-between border rounded p-3">
-                <div>
-                    <div class="text-sm font-medium">{{ $item['name'] }}</div>
-                    <div class="text-xs text-gray-500">{{ $item['variant_display_name'] }}</div>
-                </div>
-                <div class="flex items-center gap-3">
-                    @php
-                        $maxQty = 999999;
-                        if (!empty($item['track_inventory'])) {
-                            // Get the max quantity per order setting (if set)
-                            $maxQtyPerOrder = (int)($item['max_quantity_per_order'] ?? 0);
-                            
-                            // If max_quantity_per_order is set and greater than 0, use it as the primary limit
-                            if ($maxQtyPerOrder > 0) {
-                                // If backorders are allowed, we can go up to max_quantity_per_order
-                                if ($item['allow_backorders']) {
-                                    $maxQty = $maxQtyPerOrder;
+            <div wire:key="cart-item-{{ $item['id'] }}" class="border rounded p-3">
+                <div class="flex items-center justify-between">
+                    <div class="flex items-center gap-3">
+                        <div class="w-16 h-16 flex items-center justify-center bg-gray-50 border rounded overflow-hidden">
+                            @if(!empty($item['image_url']))
+                                <img src="{{ $item['image_url'] }}" alt="{{ $item['name'] ?? 'Item' }}" class="object-cover w-full h-full" />
+                            @else
+                                <div class="text-[11px] text-gray-400">No image</div>
+                            @endif
+                        </div>
+                        <div>
+                            <div class="text-sm font-medium">{{ $item['name'] }}</div>
+                            <div class="text-xs text-gray-500">{{ $item['variant_display_name'] }}</div>
+                        </div>
+                    </div>
+                    <div class="flex items-center gap-3">
+                        @php
+                            $maxQty = 999999;
+                            if (!empty($item['track_inventory'])) {
+                                // Get the max quantity per order setting (if set)
+                                $maxQtyPerOrder = (int)($item['max_quantity_per_order'] ?? 0);
+                                
+                                // If max_quantity_per_order is set and greater than 0, use it as the primary limit
+                                if ($maxQtyPerOrder > 0) {
+                                    // If backorders are allowed, we can go up to max_quantity_per_order
+                                    if ($item['allow_backorders']) {
+                                        $maxQty = $maxQtyPerOrder;
+                                    } else {
+                                        // If backorders are not allowed, we're limited by the lesser of:
+                                        // 1. max_quantity_per_order
+                                        // 2. available stock
+                                        $available = (int)($item['available'] ?? 0);
+                                        $maxQty = min($maxQtyPerOrder, $available);
+                                        // Ensure we have at least 1 if we have any available stock
+                                        $maxQty = max(1, $maxQty);
+                                    }
                                 } else {
-                                    // If backorders are not allowed, we're limited by the lesser of:
-                                    // 1. max_quantity_per_order
-                                    // 2. available stock
-                                    $available = (int)($item['available'] ?? 0);
-                                    $maxQty = min($maxQtyPerOrder, $available);
-                                    // Ensure we have at least 1 if we have any available stock
+                                    // No max_quantity_per_order set, use original logic
+                                    $maxQty = (int)($item['allow_backorders'] ? 999999 : ($item['available'] ?? 0));
                                     $maxQty = max(1, $maxQty);
                                 }
-                            } else {
-                                // No max_quantity_per_order set, use original logic
-                                $maxQty = (int)($item['allow_backorders'] ? 999999 : ($item['available'] ?? 0));
-                                $maxQty = max(1, $maxQty);
                             }
-                        }
-                    @endphp
-                    <input type="number" min="1" max="{{ $maxQty }}" wire:model.live="cart.items.{{ $loop->index }}.qty" class="w-24 text-center border rounded" />
-                </div>
-                <div class="w-24 text-right">${{ number_format($item['subtotal'], 2) }}</div>
-                @php 
-                    $isLow = ($item['available'] ?? 0) > 0 && ($item['available'] ?? 0) <= ($item['min_quantity_alert'] ?? 0);
-                    $maxQtyPerOrder = (int)($item['max_quantity_per_order'] ?? 0);
-                    $currentQty = (int)($item['qty'] ?? 0);
-                @endphp
-                @if($maxQtyPerOrder > 0 && $currentQty > $maxQtyPerOrder)
-                    <div class="text-xs text-red-600 font-medium">Maximum quantity allowed is {{ $maxQtyPerOrder }}</div>
-                @else
-                    <div class="w-40 text-right text-xs {{ ($item['available'] ?? 0) > 0 ? ($isLow ? 'text-yellow-600' : 'text-green-600') : 'text-red-600' }}" @if($isLow) title="Only {{ $item['available'] }} left" @endif>
-                        {{ $item['availability_label'] ?? '' }}
-                        @php
-                            $bq = (int)($item['backorder_qty'] ?? 0);
                         @endphp
-                        @if($bq > 0)
-                            <div class="mt-1 text-[11px] text-gray-500">
-                                Backorder {{ $bq }}
+                        <input type="number" min="1" max="{{ $maxQty }}" wire:model.live="cart.items.{{ $loop->index }}.qty" @if(($item['catalog_id'] ?? null) == 2) disabled @endif class="w-24 text-center border rounded @if(($item['catalog_id'] ?? null) == 2) bg-gray-100 cursor-not-allowed @endif" title="@if(($item['catalog_id'] ?? null) == 2) Quantity is fixed for room bookings @endif" />
+                        <div class="w-24 text-right">${{ number_format($item['subtotal'], 2) }}</div>
+                        @php 
+                            $isLow = ($item['available'] ?? 0) > 0 && ($item['available'] ?? 0) <= ($item['min_quantity_alert'] ?? 0);
+                            $maxQtyPerOrder = (int)($item['max_quantity_per_order'] ?? 0);
+                            $currentQty = (int)($item['qty'] ?? 0);
+                        @endphp
+                        @if($maxQtyPerOrder > 0 && $currentQty > $maxQtyPerOrder)
+                            <div class="text-xs text-red-600 font-medium">Maximum quantity allowed is {{ $maxQtyPerOrder }}</div>
+                        @else
+                            <div class="w-40 text-right text-xs {{ ($item['available'] ?? 0) > 0 ? ($isLow ? 'text-yellow-600' : 'text-green-600') : 'text-red-600' }}" @if($isLow) title="Only {{ $item['available'] }} left" @endif>
+                                {{ $item['availability_label'] ?? '' }}
+                                @php
+                                    $bq = (int)($item['backorder_qty'] ?? 0);
+                                @endphp
+                                @if($bq > 0)
+                                    <div class="mt-1 text-[11px] text-gray-500">
+                                        Backorder {{ $bq }}
+                                    </div>
+                                @endif
                             </div>
                         @endif
+                        <button wire:click="remove('{{ $item['id'] }}')" class="text-red-600 text-sm">Remove</button>
+                    </div>
+                </div>
+                @php
+                    $hasAddons = !empty($item['addons']) && is_array($item['addons']) && count($item['addons']) > 0;
+                    $hasPets = !empty($item['pets']) && is_array($item['pets']) && count($item['pets']) > 0;
+                @endphp
+                @if($hasAddons)
+                    <div class="mt-3 pt-3 border-t border-gray-200">
+                        <div class="text-xs font-medium text-gray-600 mb-2">Add-ons:</div>
+                        <div class="flex flex-wrap gap-2">
+                            @foreach($item['addons'] as $addon)
+                                <div class="px-2 py-1 bg-blue-50 border border-blue-200 rounded text-xs">
+                                    <span class="font-medium text-blue-800">
+                                        {{ $addon['name'] ?? ($addon['addon_name'] ?? 'Add-on') }}
+                                        @if(!empty($addon['variant_name']))
+                                            - {{ $addon['variant_name'] }}
+                                        @endif
+                                    </span>
+                                    @if(isset($addon['qty']) && $addon['qty'] > 1)
+                                        <span class="text-blue-600">(×{{ $addon['qty'] }})</span>
+                                    @endif
+                                    @if(isset($addon['price']) || isset($addon['unit_price']))
+                                        <span class="text-blue-600 ml-1">
+                                            ${{ number_format(($addon['price'] ?? $addon['unit_price'] ?? 0) * ($addon['qty'] ?? 1), 2) }}
+                                        </span>
+                                    @endif
+                                </div>
+                            @endforeach
+                        </div>
                     </div>
                 @endif
-                <button wire:click="remove('{{ $item['id'] }}')" class="text-red-600 text-sm">Remove</button>
+                @if($hasPets)
+                    <div class="mt-3 @if(!$hasAddons) pt-3 border-t border-gray-200 @endif">
+                        <div class="text-xs font-medium text-gray-600 mb-2">Pet Profiles:</div>
+                        <div class="flex flex-wrap gap-2">
+                            @foreach($item['pets'] as $pet)
+                                <div class="px-2 py-1 bg-emerald-50 border border-emerald-200 rounded text-xs text-emerald-800">
+                                    <span class="font-medium">{{ $pet['pet_name'] ?? 'Pet' }}</span>
+                                    @if(!empty($pet['pet_size_name']))
+                                        <span class="ml-1">({{ $pet['pet_size_name'] }})</span>
+                                    @endif
+                                </div>
+                            @endforeach
+                        </div>
+                    </div>
+                @endif
             </div>
         @empty
             <div class="text-gray-500">Your cart is empty.</div>

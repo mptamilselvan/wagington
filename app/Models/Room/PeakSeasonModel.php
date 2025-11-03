@@ -10,7 +10,6 @@ class PeakSeasonModel extends Model
     protected $fillable = [
         'title',
         'peak_price_variation',
-        'weekend_price_variation',
         'start_date',
         'end_date',
         'description',
@@ -22,7 +21,6 @@ class PeakSeasonModel extends Model
         'start_date' => 'date',
         'end_date' => 'date',
         'peak_price_variation' => 'decimal:2',
-        'weekend_price_variation' => 'decimal:2',
     ];
 
     public function setTitleAttribute($value)

@@ -20,6 +20,13 @@ class CatalogSeeder extends Seeder
                 'created_at' => now(),
                 'updated_at' => now(),
             ],
+            [
+                'id' => 2,
+                'name' => 'room-booking',
+                'description' => 'Room Booking Catalog',
+                'created_at' => now(),
+                'updated_at' => now(),
+            ],
         ];
 
         DB::table('catalogs')->insertOrIgnore($catalogs);

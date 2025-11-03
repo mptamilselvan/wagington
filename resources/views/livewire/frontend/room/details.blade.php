@@ -89,67 +89,41 @@
         </div>
 
         <!-- Tab Content -->
-        <div class="grid grid-cols-1 lg:grid-cols-2 gap-8" style="padding-left: 30px; padding-right: 30px;">
+        <!-- Overview Tab -->
+        <div class="grid grid-cols-1 lg:grid-cols-2 gap-8" style="padding-left: 30px; padding-right: 30px;" x-show="activeTab === 'overview'" x-transition>
             <!-- Left Column - Text Content -->
             <div class="space-y-6">
-                <!-- Overview Tab -->
-                <div x-show="activeTab === 'overview'" x-transition>
-                    <div class="prose max-w-none">
-                        <!--<h3 class="text-lg font-semibold text-gray-900 mb-4 ">Room Description</h3>-->
-                        <div class="text-gray-700 leading-10 text-lg">
-                            {!! nl2br(e($roomType->room_description)) !!}
-                        </div>
-                        @if(!empty($roomType->room_attributes) && is_array($roomType->room_attributes) && count($roomType->room_attributes) > 0)
-                        <div class="mt-8">
-                            <h4 class="text-xl font-semibold text-gray-900 mb-4">Room Attributes</h4>
-                            <div class="flex flex-wrap gap-2">
-                                @foreach($roomType->room_attributes as $attribute)
-                                    @if(!empty($attribute))
-                                    <span class="inline-flex items-center px-3 py-1.5 bg-blue-100 text-blue-800 rounded-lg border border-blue-200 text-sm font-medium">{{ $attribute }}</span>
-                                    @endif
-                                @endforeach
-                            </div>
-                        </div>
-                        @endif
-
-                        @if(!empty($roomType->room_amenities) && is_array($roomType->room_amenities) && count($roomType->room_amenities) > 0)
-                        <div class="mt-6">
-                            <h4 class="text-xl font-semibold text-gray-900 mb-4">Room Amenities</h4>
-                            <div class="flex flex-wrap gap-2">
-                                @foreach($roomType->room_amenities as $amenity)
-                                    @if(!empty($amenity))
-                                    <span class="inline-flex items-center px-3 py-1.5 bg-green-100 text-green-800 rounded-lg border border-green-200 text-sm font-medium">{{ $amenity }}</span>
-                                    @endif
-                                @endforeach
-                            </div>
-                        </div>
-                        @endif
+                <div class="prose max-w-none">
+                    <!--<h3 class="text-lg font-semibold text-gray-900 mb-4 ">Room Description</h3>-->
+                    <div class="text-gray-700 leading-10 text-lg">
+                        {!! nl2br(e($roomType->room_description)) !!}
                     </div>
-                </div>
-
-                <!-- Highlights Tab -->
-                @if($hasHighlights)
-                <div x-show="activeTab === 'highlights'" x-transition>
-                    <div class="prose max-w-none">
-                        <!--<h3 class="text-lg font-semibold text-gray-900 mb-4">Room Highlights</h3>-->
-                        <div class="text-gray-700 leading-10 text-lg">
-                            {!! nl2br(e($roomType->room_highlights)) !!}
+                    @if(!empty($roomType->room_attributes) && is_array($roomType->room_attributes) && count($roomType->room_attributes) > 0)
+                    <div class="mt-8">
+                        <h4 class="text-xl font-semibold text-gray-900 mb-4">Room Attributes</h4>
+                        <div class="flex flex-wrap gap-2">
+                            @foreach($roomType->room_attributes as $attribute)
+                                @if(!empty($attribute))
+                                <span class="inline-flex items-center px-3 py-1.5 bg-blue-100 text-blue-800 rounded-lg border border-blue-200 text-sm font-medium">{{ $attribute }}</span>
+                                @endif
+                            @endforeach
                         </div>
                     </div>
-                </div>
-                @endif
+                    @endif
 
-                <!-- Terms & Conditions Tab -->
-                @if($hasTerms)
-                <div x-show="activeTab === 'terms'" x-transition>
-                    <div class="prose max-w-none">
-                        <!--<h3 class="text-lg font-semibold text-gray-900 mb-4">Terms & Conditions</h3>-->
-                        <div class="text-gray-700 leading-10 text-lg">
-                            {!! nl2br(e($roomType->room_terms_and_conditions)) !!}
+                    @if(!empty($roomType->room_amenities) && is_array($roomType->room_amenities) && count($roomType->room_amenities) > 0)
+                    <div class="mt-6">
+                        <h4 class="text-xl font-semibold text-gray-900 mb-4">Room Amenities</h4>
+                        <div class="flex flex-wrap gap-2">
+                            @foreach($roomType->room_amenities as $amenity)
+                                @if(!empty($amenity))
+                                <span class="inline-flex items-center px-3 py-1.5 bg-green-100 text-green-800 rounded-lg border border-green-200 text-sm font-medium">{{ $amenity }}</span>
+                                @endif
+                            @endforeach
                         </div>
                     </div>
+                    @endif
                 </div>
-                @endif
             </div>
 
             <!-- Right Column - Images -->
@@ -231,6 +205,28 @@
                 @endif
             </div>
         </div>
+
+        <!-- Highlights Tab -->
+        @if($hasHighlights)
+        <div x-show="activeTab === 'highlights'" x-transition style="padding-left: 30px; padding-right: 30px;">
+            <div class="prose max-w-none">
+                <div class="text-gray-700 leading-10 text-lg">
+                    {!! nl2br(e($roomType->room_highlights)) !!}
+                </div>
+            </div>
+        </div>
+        @endif
+
+        <!-- Terms & Conditions Tab -->
+        @if($hasTerms)
+        <div x-show="activeTab === 'terms'" x-transition style="padding-left: 30px; padding-right: 30px;">
+            <div class="prose max-w-none">
+                <div class="text-gray-700 leading-10 text-lg">
+                    {!! nl2br(e($roomType->room_terms_and_conditions)) !!}
+                </div>
+            </div>
+        </div>
+        @endif
     </div>
                     </div>
 

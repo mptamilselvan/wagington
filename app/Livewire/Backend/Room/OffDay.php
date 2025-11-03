@@ -50,6 +50,27 @@ class OffDay extends Component
         $this->validate();
 
         try {
+            // Check overlap with existing off days
+            $start = $this->start_date;
+            $end = $this->end_date;
+            $overlaps = OffDayModel::where(function($q) use ($start, $end) {
+                    $q->whereBetween('start_date', [$start, $end])
+                      ->orWhereBetween('end_date', [$start, $end])
+                      ->orWhere(function($qq) use ($start, $end) {
+                          $qq->where('start_date', '<=', $start)
+                             ->where('end_date', '>=', $end);
+                      });
+                })
+                ->when($this->editId, function($q) {
+                    $q->where('id', '!=', $this->editId);
+                })
+                ->exists();
+
+            if ($overlaps) {
+                $this->addError('start_date', 'The selected date range overlaps an existing off day.');
+                session()->flash('error', 'Date range overlaps with an existing off day.');
+                return;
+            }
             $data = $this->only(['title', 'start_date', 'end_date', 'reason', 'off_day_price_variation']);
             $data['created_by'] = Auth::user()->id;
 
@@ -61,6 +82,7 @@ class OffDay extends Component
             }
 
             $this->resetFields();
+            session()->flash('success', 'Off day saved successfully.');
         } catch (Exception $e) {
             $e->getMessage();
         }

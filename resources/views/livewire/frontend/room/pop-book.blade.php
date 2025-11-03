@@ -1,4 +1,32 @@
-<div x-data="{ open:false }" x-on:open-booking.window="open=true; $wire.refreshBooking(); if($event.detail.roomId){ $wire.setRoom($event.detail.roomId); } if($event.detail.roomTypeId){ $wire.room_type_id = $event.detail.roomTypeId; }" x-cloak>
+<div x-data="{ open:false }" 
+     x-on:open-booking.window="open=true; $wire.refreshBooking(); if($event.detail.roomId){ $wire.setRoom($event.detail.roomId); } if($event.detail.roomTypeId){ $wire.room_type_id = $event.detail.roomTypeId; }"
+    x-init="(() => {
+        // Check URL parameter for auto-open (from alternative room type switch)
+        const urlParams = new URLSearchParams(window.location.search);
+        const shouldOpen = urlParams.get('open_booking') === '1';
+        // Also check if autoOpenModal flag is set from server
+        const hasAutoOpenFlag = @js($autoOpenModal);
+        if (shouldOpen || hasAutoOpenFlag) {
+            $nextTick(() => {
+                open = true;
+                $wire.refreshBooking();
+                // Auto-check availability after modal opens and data is restored
+                // Use a longer delay to ensure all Livewire data is synced
+                setTimeout(() => {
+                    // Check if we have the required data before checking availability
+                    if ($wire.start_date && $wire.end_date && $wire.selectedPets && $wire.selectedPets.length > 0 && $wire.room_type_id) {
+                        $wire.checkAvailability();
+                    }
+                }, 1000);
+                // Clean URL by removing the query parameter
+                if (shouldOpen) {
+                    const newUrl = window.location.pathname;
+                    window.history.replaceState({}, document.title, newUrl);
+                }
+            });
+        }
+    })()"
+     x-cloak>
     <!-- Backdrop -->
     <div x-show="open" class="fixed inset-0 z-[60] bg-black/40" @click="open=false"></div>
 
@@ -146,7 +174,8 @@
                             'star' => true,
                             'class' => 'w-full text-xl text-gray-800',
                             'error' => $errors->first('start_date'),
-                            'min' => date('Y-m-d')
+                            'min' => date('Y-m-d'),
+                            'live' => true
                             ])
                         @endcomponent
                     </div>
@@ -160,7 +189,8 @@
                             'star' => true,
                             'class' => 'w-full text-xl text-gray-800',
                             'error' => $errors->first('end_date'),
-                            'min' => date('Y-m-d')
+                            'min' => $this->endDateMin,
+                            'live' => true
                             ])
                         @endcomponent
                     </div>
@@ -171,6 +201,7 @@
                     wire:click="checkAvailability"
                     wire:loading.attr="disabled"
                     wire:target="checkAvailability"
+                    @if(!$this->canCheckAvailability) disabled @endif
                     class="w-full md:w-auto inline-flex items-center gap-2 px-6 py-3 rounded-full bg-blue-600 hover:bg-blue-700 text-white font-semibold shadow-md disabled:opacity-70 disabled:cursor-not-allowed"
                 >
                     <svg wire:loading wire:target="checkAvailability" class="h-5 w-5 animate-spin text-white" viewBox="0 0 24 24" fill="none">
@@ -199,44 +230,145 @@
                         
                     @if(!empty($availabilityDetails))
                         <div class="mt-2 text-gray-700">
-                            <div class="text-xs uppercase tracking-wide {{ $availabilityType === 'success' ? 'text-green-700' : 'text-red-700' }}">Summary</div>
-                            <div class="mt-1">Available rooms: <span class="font-semibold">{{ $availabilityDetails['available_rooms'] ?? 0 }}</span></div>
+                            <!--<div class="text-xs uppercase tracking-wide {{ $availabilityType === 'success' ? 'text-green-700' : 'text-red-700' }}">Summary</div>-->
+                            <!--<div class="mt-1">Available rooms: <span class="font-semibold">{{ $availabilityDetails['available_rooms'] ?? 0 }}</span></div>-->
+                            
                             @if(!empty($availabilityDetails['pet_size_availability']))
-                                <div class="mt-2">Pet size capacities:</div>
-                                <ul class="mt-1 list-disc list-inside space-y-0.5 text-gray-800">
+                                <!--<div class="mt-2">Pet size capacities:</div>-->
+                                <!--<ul class="mt-1 list-disc list-inside space-y-0.5 text-gray-800">-->
                                     @foreach($availabilityDetails['pet_size_availability'] as $ps)
-                                        <li>
-                                            <span class="font-semibold">{{ $ps['pet_size_name'] ?? 'Size ID ' . ($ps['pet_size_id'] ?? '?') }}</span> — remaining {{ $ps['remaining'] ?? 0 }} (used {{ $ps['used'] ?? 0 }} of {{ $ps['limit'] ?? 0 }})
-                                        </li>
+                                      <!-- <li> 
+                                            <span class="font-semibold">{{ $ps['pet_size_name'] ?? 'Size ID ' . ($ps['pet_size_id'] ?? '?') }}</span> —  remaining {{ $ps['remaining'] ?? 0 }} (used {{ $ps['used'] ?? 0 }} of {{ $ps['limit'] ?? 0 }}) 
+                                       </li> --> 
                                     @endforeach
-                                </ul>
-                            @endif
+                                <!--<ul>-->
+                            @endif 
+                           
+                             
                             @if(!empty($availabilityDetails['pet_size_availability_by_room']))
-                                <div class="mt-3">Per-room availability:</div>
+                               <!--<div class="mt-3">Per-room availability:</div>-->
                                 <div class="mt-1 space-y-2">
                                     @foreach($availabilityDetails['pet_size_availability_by_room'] as $room)
                                         <div class="border border-gray-200 rounded-lg p-3 bg-white">
-                                            <div class="text-xs text-gray-600 mb-1">Room #{{ $room['room_id'] }}</div>
+                                            <!--<div class="text-xs text-gray-600 mb-1">Room #{{ $room['room_id'] }}</div>-->
                                             @if(!empty($room['sizes']))
                                                 <ul class="list-disc list-inside text-sm">
                                                     @foreach($room['sizes'] as $sz)
-                                                        <li>
+                                                       <!-- <li>
                                                             <span class="font-semibold">{{ $sz['pet_size_name'] ?? 'Size' }}</span> — remaining {{ $sz['remaining'] ?? 0 }} (used {{ $sz['used'] ?? 0 }} of {{ $sz['limit'] ?? 0 }})
-                                                        </li>
+                                                        </li> -->
                                                     @endforeach
                                                 </ul>
                                             @endif
                                         </div>
                                     @endforeach
-                                </div>
+                                </div> 
                             @endif
+                            
                         </div>
                     @endif
                     </div>
                 </div>
             @endif
 
-            @if($availabilityType === 'success' && !empty($quote))
+            {{-- Show alternative room types if requested room is not available --}}
+            @if($availabilityType === 'error' && !empty($availabilityDetails['alternative_room_types']))
+                <div class="mt-4 rounded-2xl border border-blue-200 bg-blue-50 shadow-sm overflow-hidden">
+                    <div class="px-6 py-4 border-b border-blue-200">
+                        <h3 class="text-xl font-semibold text-blue-900">Alternative Room Options Available</h3>
+                        <p class="text-sm text-blue-700 mt-1">The following room types are available for your selected dates and pets:</p>
+                    </div>
+                    <div class="p-6 space-y-4">
+                        @foreach($availabilityDetails['alternative_room_types'] as $alt)
+                            <div class="bg-white rounded-xl border border-blue-200 p-5 hover:shadow-md transition-shadow">
+                                <div class="flex items-start justify-between mb-3">
+                                    <div>
+                                        <h4 class="text-lg font-semibold text-gray-900">{{ $alt['room_type_name'] }}</h4>
+                                        <p class="text-sm text-gray-600 mt-1">
+                                            {{ $alt['available_rooms'] }} room{{ $alt['available_rooms'] > 1 ? 's' : '' }} available
+                                        </p>
+                                    </div>
+                                    <div class="text-right">
+                                        <div class="text-2xl font-bold text-blue-600">${{ number_format($alt['pricing']['total'] ?? 0, 2) }}</div>
+                                        <div class="text-xs text-gray-500">for {{ $alt['pricing']['days'] ?? 1 }} day{{ ($alt['pricing']['days'] ?? 1) > 1 ? 's' : '' }}</div>
+                                    </div>
+                                </div>
+
+                                {{-- Available Rooms --}}
+                                @if(!empty($alt['rooms']))
+                                    <div class="mt-3 mb-3">
+                                        <div class="text-sm font-semibold text-gray-700 mb-2">Available Rooms:</div>
+                                        <div class="grid grid-cols-2 gap-2">
+                                            @foreach($alt['rooms'] as $room)
+                                                <div class="text-xs bg-gray-50 rounded-lg px-2 py-1 border border-gray-200">
+                                                    <span class="font-medium">{{ $room['room_name'] }}</span>
+                                                </div>
+                                            @endforeach
+                                        </div>
+                                    </div>
+                                @endif
+
+                                {{-- Pet Size Availability --}}
+                                @if(!empty($alt['pet_size_availability']))
+                                    <div class="mt-3 mb-3">
+                                        <!--<div class="text-sm font-semibold text-gray-700 mb-2">Pet Size Availability:</div>-->
+                                        <div class="space-y-1">
+                                            @foreach($alt['pet_size_availability'] as $psa)
+                                                <!-- <div class="flex items-center justify-between text-xs">
+                                                <span class="text-gray-700">{{ $psa['pet_size_name'] }}</span> 
+                                                    <span class="{{ ($psa['remaining'] ?? 0) >= ($psa['needed'] ?? 0) ? 'text-green-600' : 'text-red-600' }} font-medium">
+                                                        {{ $psa['remaining'] ?? 0 }}/{{ $psa['needed'] ?? 0 }} available
+                                                    </span>
+                                                </div> -->
+                                            @endforeach
+                                        </div>
+                                    </div>
+                                @endif
+
+                                {{-- Pricing Breakdown --}}
+                                @if(!empty($alt['pricing']['pet_lines']))
+                                    <div class="mt-3 mb-3 pt-3 border-t border-gray-200">
+                                        <div class="text-sm font-semibold text-gray-700 mb-2">Pricing Breakdown:</div>
+                                        <div class="space-y-1">
+                                            @foreach($alt['pricing']['pet_lines'] as $pl)
+                                                <div class="flex items-center justify-between text-xs">
+                                                    <span class="text-gray-700">{{ $pl['pet_name'] }} ({{ $pl['pet_size_name'] }})</span>
+                                                    <span class="font-medium text-gray-900">${{ number_format($pl['final_price'] ?? 0, 2) }}</span>
+                                                </div>
+                                            @endforeach
+                                        </div>
+                                        @if(($alt['pricing']['variation_total'] ?? 0) > 0)
+                                            <div class="mt-2 pt-2 border-t border-gray-100 text-xs">
+                                                <div class="flex justify-between text-gray-600">
+                                                    <span>Base Total:</span>
+                                                    <span>${{ number_format($alt['pricing']['base_total'] ?? 0, 2) }}</span>
+                                                </div>
+                                                <div class="flex justify-between text-gray-600">
+                                                    <span>Variation:</span>
+                                                    <span>+ ${{ number_format($alt['pricing']['variation_total'] ?? 0, 2) }}</span>
+                                                </div>
+                                            </div>
+                                        @endif
+                                    </div>
+                                @endif
+
+                                {{-- Action Button --}}
+                                <div class="mt-4 pt-4 border-t border-gray-200">
+                                    <button
+                                        type="button"
+                                        wire:click="switchToAlternativeRoomType('{{ $alt['room_type_slug'] }}', {{ $alt['room_type_id'] }})"
+                                        class="w-full px-4 py-2 bg-blue-600 hover:bg-blue-700 text-white font-semibold rounded-lg transition-colors"
+                                    >
+                                        Book This Room Type
+                                    </button>
+                                </div>
+                            </div>
+                        @endforeach
+                    </div>
+                </div>
+            @endif
+
+            @if($isReadyForCart && $availabilityType === 'success' && !empty($quote))
                 <div class="mt-4 rounded-2xl border border-gray-200 bg-white shadow-sm overflow-hidden">
                     <div class="px-6 py-4 text-2xl font-semibold text-gray-800">Room Price Summary</div>
                     <div class="border-t border-gray-200"></div>
@@ -337,7 +469,7 @@
         </div>
 
         <div class="p-4 border-t bg-white space-y-3 z-[62] shadow-[0_-4px_10px_rgba(0,0,0,0.05)] shrink-0">
-            @if(!empty($quote))
+            @if($isReadyForCart && !empty($quote))
                 <!-- Final Price Summary -->
                 <div class="text-sm font-semibold text-gray-900 mb-2">Final Price Summary</div>
                 <div class="space-y-2 text-sm">
@@ -357,11 +489,31 @@
             @endif
             <div class="flex gap-3" x-data="{ showAuthPrompt: false }" x-on:show-auth-prompt.window="showAuthPrompt = true">
                 @auth
-                    <a href="" class="flex-1 px-4 py-2 border rounded text-center">View booking</a>
-                    <button wire:click="proceed" class="flex-1 px-4 py-2 rounded bg-blue-600 text-white text-center">Proceed to pay</button>
+                    <!--<a href="" class="flex-1 px-4 py-2 border rounded text-center">View booking</a>-->
+                    <button 
+                        wire:click="addToCart"
+                        wire:loading.attr="disabled"
+                        wire:target="addToCart"
+                        @if(!$isReadyForCart) disabled @endif
+                        class="flex-1 px-4 py-2 rounded bg-blue-600 text-white text-center disabled:opacity-50 disabled:cursor-not-allowed hover:bg-blue-700 inline-flex items-center justify-center gap-2"
+                    >
+                        <svg wire:loading wire:target="addToCart" class="h-5 w-5 animate-spin text-white" viewBox="0 0 24 24" fill="none">
+                            <circle class="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" stroke-width="4" />
+                            <path class="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8v4a4 4 0 00-4 4H4z" />
+                        </svg>
+                        <span wire:loading.remove wire:target="addToCart">Add to Cart</span>
+                        <span wire:loading wire:target="addToCart">Adding...</span>
+                    </button>
                 @else
                     <button type="button" @click="showAuthPrompt = true" class="flex-1 px-4 py-2 border rounded text-center">View booking</button>
-                    <button type="button" wire:click="guestProceed" class="flex-1 px-4 py-2 rounded bg-blue-600 text-white text-center">Proceed to pay</button>
+                    <button 
+                        type="button" 
+                        wire:click="guestProceed" 
+                        @if(!$isReadyForCart) disabled @endif
+                        class="flex-1 px-4 py-2 rounded bg-blue-600 text-white text-center disabled:opacity-50 disabled:cursor-not-allowed hover:bg-blue-700"
+                    >
+                        Proceed to pay
+                    </button>
 
                     <!-- Guest Auth Prompt -->
                     <div x-cloak x-show="showAuthPrompt" class="fixed inset-0 z-[70] flex items-center justify-center">
