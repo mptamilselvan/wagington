@@ -90,7 +90,9 @@ class OrderFulfillmentService
                 }
                 
                 // --- Unified Processing Logic ---
-                if ($entity->fulfillment_status === 'pending') {
+                // Allow marking as processing if in pending OR awaiting_stock (after restock) status
+                if (in_array($entity->fulfillment_status, ['pending', 'awaiting_stock'])) {
+                    $oldStatus = $entity->fulfillment_status;
                     $entity->update([
                         'fulfillment_status' => 'processing',
                         'fulfilled_quantity' => 0
@@ -101,9 +103,10 @@ class OrderFulfillmentService
                         'type' => $type,
                         'id' => $id,
                         'order_id' => $type === 'item' ? $entity->order_id : $entity->orderItem->order_id,
+                        'old_status' => $oldStatus
                     ]);
                 } else {
-                    $results[$identifier] = ['success' => false, 'message' => "$entityName is not in pending status"];
+                    $results[$identifier] = ['success' => false, 'message' => "$entityName must be in pending or awaiting_stock status (current: {$entity->fulfillment_status})"];
                 }
                 // ---------------------------------
             }
@@ -116,13 +119,135 @@ class OrderFulfillmentService
     }
     
     /**
+     * Validate that all SHIPPABLE items in an order are ready for shipping
+     * Non-shippable items (awaiting_handover, handed_over) are excluded from validation
+     * Required because we have a single tracking number per order
+     */
+    private function validateOrderReadyForShipping(Order $order): array
+    {
+        $notReadyItems = [];
+        
+        // Check all main items (exclude non-shippable)
+        foreach ($order->items as $item) {
+            // Skip non-shippable items (awaiting_handover, handed_over)
+            if (in_array($item->fulfillment_status, ['awaiting_handover', 'handed_over'])) {
+                continue;
+            }
+            
+            // Check if shippable items are ready
+            if (!in_array($item->fulfillment_status, ['processing', 'shipped', 'delivered'])) {
+                $notReadyItems[] = [
+                    'name' => $item->product_name,
+                    'status' => $item->fulfillment_status,
+                    'type' => 'item'
+                ];
+            }
+            
+            // Check all addons for this item (exclude non-shippable)
+            foreach ($item->addons as $addon) {
+                // Skip non-shippable addons
+                if (in_array($addon->fulfillment_status, ['awaiting_handover', 'handed_over'])) {
+                    continue;
+                }
+                
+                if (!in_array($addon->fulfillment_status, ['processing', 'shipped', 'delivered'])) {
+                    $notReadyItems[] = [
+                        'name' => $addon->addon_product_name . ' (Addon)',
+                        'status' => $addon->fulfillment_status,
+                        'type' => 'addon'
+                    ];
+                }
+            }
+        }
+        
+        if (!empty($notReadyItems)) {
+            $itemsList = collect($notReadyItems)->map(fn($item) => 
+                "{$item['name']} (Status: {$item['status']})"
+            )->implode(', ');
+            
+            return [
+                'ready' => false,
+                'message' => "Cannot ship order #{$order->order_number}. All shippable items must be in 'Processing' status. Items not ready: {$itemsList}"
+            ];
+        }
+        
+        return ['ready' => true, 'message' => ''];
+    }
+    
+    /**
      * Mark order items as shipped
      */
     public function markItemsAsShipped(array $itemIds, ?string $trackingNumber = null, ?string $carrier = null): array
     {
         $results = [];
         
-        DB::transaction(function() use ($itemIds, $trackingNumber, $carrier, &$results) {
+        // First, validate that all items belong to the same order and all are ready
+        $entities = $this->getEntities($itemIds);
+        $orderIds = [];
+        
+        foreach ($entities['items'] as $item) {
+            $orderIds[] = $item->order_id;
+        }
+        foreach ($entities['addons'] as $addon) {
+            $orderIds[] = $addon->orderItem->order_id;
+        }
+        
+        $uniqueOrderIds = array_unique($orderIds);
+        
+        if (count($uniqueOrderIds) > 1) {
+            return [[
+                'success' => false,
+                'message' => 'Cannot ship items from multiple orders together. Please ship one order at a time.'
+            ]];
+        }
+        
+        if (count($uniqueOrderIds) === 0) {
+            return [[
+                'success' => false,
+                'message' => 'No valid items found to ship.'
+            ]];
+        }
+        
+        $orderId = $uniqueOrderIds[0];
+        $order = Order::with(['items.addons'])->find($orderId);
+        
+        // Validate that ALL shippable items (processing status) are selected
+        $allShippableItems = [];
+        
+        // Collect all items and addons that are in "processing" status (ready to ship)
+        foreach ($order->items as $item) {
+            if ($item->fulfillment_status === 'processing') {
+                $allShippableItems[] = 'item_' . $item->id;
+            }
+            
+            foreach ($item->addons as $addon) {
+                if ($addon->fulfillment_status === 'processing') {
+                    $allShippableItems[] = 'addon_' . $addon->id;
+                }
+            }
+        }
+        
+        // Check if all shippable items are selected
+        $selectedIds = array_map('strval', $itemIds);
+        $missingItems = array_diff($allShippableItems, $selectedIds);
+        
+        if (!empty($missingItems)) {
+            return [[
+                'success' => false,
+                'message' => 'All items in "Processing" status must be shipped together with the same tracking number. Please select all items or use "Mark Processing" to update individual items.'
+            ]];
+        }
+        
+        // Validate all selected items are in the correct status for shipping
+        $validation = $this->validateOrderReadyForShipping($order);
+        if (!$validation['ready']) {
+            return [[
+                'success' => false,
+                'message' => $validation['message']
+            ]];
+        }
+        
+        DB::transaction(function() use ($itemIds, $trackingNumber, $carrier, $order, &$results) {
             foreach ($itemIds as $identifier) {
                 $parsed = $this->parseItemIdentifier($identifier);
 
@@ -182,6 +307,11 @@ class OrderFulfillmentService
             
             // Update overall order status
             $this->updateOrderStatuses($itemIds);
+            
+            // Send shipment notification email
+            if ($trackingNumber && $order) {
+                $this->sendShipmentNotification($order, $trackingNumber, $carrier);
+            }
         });
         
         return $results;
@@ -412,17 +542,56 @@ class OrderFulfillmentService
         // Check if all items are fulfilled
         $allItemsFulfilled = $this->areAllItemsFulfilled($orderItems, $addons);
         
-        // Check if order has any delivered items (regardless of allItemsFulfilled)
-        $hasDeliveredItems = $orderItems->where('fulfillment_status', 'delivered')->count() > 0 ||
-                            $addons->where('fulfillment_status', 'delivered')->count() > 0;
+        // Check delivery status for shippable items
+        $shippableItemsCount = 0;
+        $deliveredShippableItemsCount = 0;
         
-        // If order has delivered items and current status is not already delivered or completed
-        if ($hasDeliveredItems && !in_array($order->status, ['delivered', 'completed'])) {
-            $order->update(['status' => 'delivered']);
-            Log::info('OrderFulfillmentService: Order marked as delivered', [
-                'order_id' => $orderId,
-                'order_number' => $order->order_number,
-            ]);
+        // Count shippable items (exclude non-shippable: awaiting_handover, handed_over)
+        foreach ($orderItems as $item) {
+            if (!in_array($item->fulfillment_status, ['awaiting_handover', 'handed_over'])) {
+                $shippableItemsCount++;
+                if ($item->fulfillment_status === 'delivered') {
+                    $deliveredShippableItemsCount++;
+                }
+            }
+        }
+        
+        foreach ($addons as $addon) {
+            if (!in_array($addon->fulfillment_status, ['awaiting_handover', 'handed_over'])) {
+                $shippableItemsCount++;
+                if ($addon->fulfillment_status === 'delivered') {
+                    $deliveredShippableItemsCount++;
+                }
+            }
+        }
+        
+        // Determine order status based on delivered items
+        // Update status if we have delivered items and not already in final states
+        if ($deliveredShippableItemsCount > 0 && !in_array($order->status, ['completed', 'cancelled', 'refunded'])) {
+            // Check if ALL shippable items are delivered
+            if ($deliveredShippableItemsCount === $shippableItemsCount) {
+                // All shippable items delivered
+                if ($order->status !== 'delivered') {
+                    $order->update(['status' => 'delivered']);
+                    Log::info('OrderFulfillmentService: Order marked as delivered (all shippable items delivered)', [
+                        'order_id' => $orderId,
+                        'order_number' => $order->order_number,
+                        'shippable_items' => $shippableItemsCount,
+                        'delivered_items' => $deliveredShippableItemsCount
+                    ]);
+                }
+            } else {
+                // Only some shippable items delivered
+                if ($order->status !== 'partially_delivered') {
+                    $order->update(['status' => 'partially_delivered']);
+                    Log::info('OrderFulfillmentService: Order marked as partially_delivered', [
+                        'order_id' => $orderId,
+                        'order_number' => $order->order_number,
+                        'shippable_items' => $shippableItemsCount,
+                        'delivered_items' => $deliveredShippableItemsCount
+                    ]);
+                }
+            }
         }
         
         // Now check if all items are fulfilled for completion
@@ -489,13 +658,94 @@ class OrderFulfillmentService
             }
         }
         
-        // Check if any items are shipped (for partially_shipped status)
-        $hasShippedItems = $orderItems->where('fulfillment_status', 'shipped')->count() > 0 ||
-                          $addons->where('fulfillment_status', 'shipped')->count() > 0;
+        // Check if all shippable items are shipped
+        $shippedShippableItemsCount = 0;
         
-        // Only set partially_shipped if not already in a later state
-        if ($hasShippedItems && !in_array($order->status, ['delivered', 'completed'])) {
-            $order->update(['status' => 'partially_shipped']);
+        foreach ($orderItems as $item) {
+            if (!in_array($item->fulfillment_status, ['awaiting_handover', 'handed_over'])) {
+                if ($item->fulfillment_status === 'shipped') {
+                    $shippedShippableItemsCount++;
+                }
+            }
+        }
+        
+        foreach ($addons as $addon) {
+            if (!in_array($addon->fulfillment_status, ['awaiting_handover', 'handed_over'])) {
+                if ($addon->fulfillment_status === 'shipped') {
+                    $shippedShippableItemsCount++;
+                }
+            }
+        }
+        
+        // Update to 'shipped' only if ALL shippable items are shipped
+        if ($shippedShippableItemsCount > 0 && $shippedShippableItemsCount === $shippableItemsCount 
+            && !in_array($order->status, ['delivered', 'partially_delivered', 'completed'])) {
+            $order->update(['status' => 'shipped']);
+            Log::info('OrderFulfillmentService: Order marked as shipped (all shippable items shipped)', [
+                'order_id' => $orderId,
+                'order_number' => $order->order_number,
+                'shippable_items' => $shippableItemsCount,
+                'shipped_items' => $shippedShippableItemsCount
+            ]);
+        }
+        
+        // **NEW: Check if order can move from backordered to processing**
+        // This happens when all items are no longer awaiting_stock
+        if (in_array($order->status, ['backordered', 'partially_backordered'])) {
+            $this->checkAndMoveBackorderToProcessing($order, $orderItems, $addons);
+        }
+    }
+    
+    /**
+     * Check if a backordered order can move to processing status
+     * Validates that ALL items (main + addons) are in pending or awaiting_handover status
+     */
+    private function checkAndMoveBackorderToProcessing(Order $order, $orderItems, $addons): void
+    {
+        $notReadyItems = [];
+        
+        // Check all main items - must be in pending or awaiting_handover (NOT awaiting_stock)
+        foreach ($orderItems as $item) {
+            if (!in_array($item->fulfillment_status, ['pending', 'awaiting_handover', 'processing', 'shipped', 'delivered', 'handed_over'])) {
+                $notReadyItems[] = [
+                    'type' => 'item',
+                    'id' => $item->id,
+                    'name' => $item->product_name,
+                    'status' => $item->fulfillment_status
+                ];
+            }
+        }
+        
+        // Check all addons - must be in pending or awaiting_handover (NOT awaiting_stock)
+        foreach ($addons as $addon) {
+            if (!in_array($addon->fulfillment_status, ['pending', 'awaiting_handover', 'processing', 'shipped', 'delivered', 'handed_over'])) {
+                $notReadyItems[] = [
+                    'type' => 'addon',
+                    'id' => $addon->id,
+                    'name' => $addon->addon_name,
+                    'status' => $addon->fulfillment_status
+                ];
+            }
+        }
+        
+        // If all items are ready (no awaiting_stock items), move order to processing
+        if (empty($notReadyItems)) {
+            $oldStatus = $order->status;
+            $order->update(['status' => 'processing']);
+            
+            Log::info('OrderFulfillmentService: Order moved from backordered to processing', [
+                'order_id' => $order->id,
+                'order_number' => $order->order_number,
+                'old_status' => $oldStatus,
+                'new_status' => 'processing',
+                'reason' => 'All items are now ready (no longer awaiting stock)'
+            ]);
+        } else {
+            Log::info('OrderFulfillmentService: Order still has items awaiting stock', [
+                'order_id' => $order->id,
+                'order_number' => $order->order_number,
+                'items_not_ready' => $notReadyItems
+            ]);
         }
     }
     
@@ -542,6 +792,7 @@ class OrderFulfillmentService
             'overall_status' => $order->status,
             'items' => [
                 'total' => $orderItems->count(),
+                'awaiting_stock' => $orderItems->where('fulfillment_status', 'awaiting_stock')->count(),
                 'pending' => $orderItems->where('fulfillment_status', 'pending')->count(),
                 'processing' => $orderItems->where('fulfillment_status', 'processing')->count(),
                 'shipped' => $orderItems->where('fulfillment_status', 'shipped')->count(),
@@ -551,6 +802,7 @@ class OrderFulfillmentService
             ],
             'addons' => [
                 'total' => $addons->count(),
+                'awaiting_stock' => $addons->where('fulfillment_status', 'awaiting_stock')->count(),
                 'pending' => $addons->where('fulfillment_status', 'pending')->count(),
                 'processing' => $addons->where('fulfillment_status', 'processing')->count(),
                 'shipped' => $addons->where('fulfillment_status', 'shipped')->count(),
@@ -562,5 +814,43 @@ class OrderFulfillmentService
         ];
         
         return $summary;
+    }
+    
+    /**
+     * Send shipment notification email to customer
+     */
+    private function sendShipmentNotification(Order $order, string $trackingNumber, ?string $carrier = null): void
+    {
+        Log::info('OrderFulfillmentService: Sending shipment notification', [
+            'order_id' => $order->id,
+            'order_number' => $order->order_number,
+            'tracking_number' => $trackingNumber,
+            'carrier' => $carrier
+        ]);
+        
+        try {
+            // Refresh order to get latest data
+            $order->refresh();
+            
+            // Send email notification to customer
+            if ($order->user && $order->user->email) {
+                \Mail::to($order->user->email)->send(new \App\Mail\OrderShipped($order, $trackingNumber, $carrier));
+                
+                Log::info('OrderFulfillmentService: Shipment email sent successfully', [
+                    'order_id' => $order->id,
+                    'order_number' => $order->order_number,
+                    'user_email' => $order->user->email,
+                    'tracking_number' => $trackingNumber
+                ]);
+            }
+            
+        } catch (\Exception $e) {
+            Log::error('OrderFulfillmentService: Failed to send shipment notification', [
+                'order_id' => $order->id,
+                'order_number' => $order->order_number,
+                'tracking_number' => $trackingNumber,
+                'error' => $e->getMessage()
+            ]);
+        }
     }
 }

@@ -52,7 +52,7 @@ class OrderConfirmation extends Mailable
     private function getLatestPayment()
     {
         if ($this->latestPayment === null) {
-            $this->latestPayment = $this->order->payments->sortByDesc('id')->first();
+            $this->latestPayment = $this->order->payments()->orderBy('id', 'desc')->first();
         }
         return $this->latestPayment;
     }
@@ -104,9 +104,12 @@ class OrderConfirmation extends Mailable
             $attachments[] = \Illuminate\Mail\Mailables\Attachment::fromPath($this->invoicePath)
                 ->as('invoice-' . $this->order->order_number . '.pdf')
                 ->withMime('application/pdf');
-        } else if ($this->hasInvoice) {
-            // If file disappeared, update state to maintain subject consistency
-            $this->hasInvoice = false;
+        } else if ($this->hasInvoice && $this->invoicePath) {
+            // Log warning if file disappeared after detection
+            \Log::warning('Invoice file missing at send time', [
+                'order_id' => $this->order->id,
+                'expected_path' => $this->invoicePath
+            ]);
         }
         
         return $attachments;

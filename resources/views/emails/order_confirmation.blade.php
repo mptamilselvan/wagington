@@ -49,14 +49,52 @@
                       Success! Your Order <strong>#{{ $order->order_number }}</strong> is Confirmed!
                     </p>
 
-                    @if($order->shipping_address_id && $order->shipping_amount > 0 && $order->shippingAddress)
-                    <p style="margin:0 0 20px;color:#333333;font-size:16px;line-height:1.6;">
-                      Thank you for your purchase. Your order is being prepared for shipment. We'll send a separate email with tracking information shortly.
-                    </p>
+                    @if($order->status === 'processing')
+                      {{-- All items in stock - Processing --}}
+                      @if($order->shipping_address_id && $order->shipping_amount > 0 && $order->shippingAddress)
+                      <p style="margin:0 0 20px;color:#333333;font-size:16px;line-height:1.6;">
+                        Thank you for your purchase! Great news - all items are in stock and ready to ship. We're preparing your order now and will send you tracking details soon.
+                      </p>
+                      @else
+                      <p style="margin:0 0 20px;color:#333333;font-size:16px;line-height:1.6;">
+                        Thank you for your purchase. Your order is being prepared.
+                      </p>
+                      @endif
+                    @elseif($order->status === 'partially_backordered')
+                      {{-- Some items out of stock - Partially Backordered --}}
+                      <p style="margin:0 0 20px;color:#333333;font-size:16px;line-height:1.6;">
+                        Thank you for your purchase! <strong>Please note:</strong> Some items in your order are currently out of stock.
+                      </p>
+                      <p style="margin:0 0 20px;color:#333333;font-size:16px;line-height:1.6;background:#fff3cd;padding:15px;border-left:4px solid #ffc107;border-radius:4px;">
+                        <strong>⚠️ Waiting for Stock</strong><br>
+                        To ensure you receive everything together, we'll hold your order until all items are back in stock. Once everything is available, we'll ship your complete order and send you the tracking details via email.
+                      </p>
+                      <p style="margin:0 0 20px;color:#333333;font-size:16px;line-height:1.6;">
+                        We appreciate your patience and will keep you updated!
+                      </p>
+                    @elseif($order->status === 'backordered')
+                      {{-- All items out of stock - Backordered --}}
+                      <p style="margin:0 0 20px;color:#333333;font-size:16px;line-height:1.6;">
+                        Thank you for your purchase! <strong>Please note:</strong> The items in your order are currently out of stock.
+                      </p>
+                      <p style="margin:0 0 20px;color:#333333;font-size:16px;line-height:1.6;background:#fff3cd;padding:15px;border-left:4px solid #ffc107;border-radius:4px;">
+                        <strong>⚠️ Out of Stock - We'll Notify You</strong><br>
+                        Your order is confirmed, but we're waiting for stock to arrive. As soon as the items are available, we'll ship your order and send you tracking details via email.
+                      </p>
+                      <p style="margin:0 0 20px;color:#333333;font-size:16px;line-height:1.6;">
+                        Thank you for your patience - we'll keep you informed every step of the way!
+                      </p>
                     @else
-                    <p style="margin:0 0 20px;color:#333333;font-size:16px;line-height:1.6;">
-                      Thank you for your purchase. Your order is being processed.
-                    </p>
+                      {{-- Fallback for any other status --}}
+                      @if($order->shipping_address_id && $order->shipping_amount > 0 && $order->shippingAddress)
+                      <p style="margin:0 0 20px;color:#333333;font-size:16px;line-height:1.6;">
+                        Thank you for your purchase. Your order is being prepared for shipment. We'll send a separate email with tracking information shortly.
+                      </p>
+                      @else
+                      <p style="margin:0 0 20px;color:#333333;font-size:16px;line-height:1.6;">
+                        Thank you for your purchase. Your order is being processed.
+                      </p>
+                      @endif
                     @endif
 
           <!-- Order Summary -->

@@ -69,15 +69,9 @@ class InvoiceController extends Controller
                 $filename = $matchingFile;
             }
             
-            // Get the file contents
-            $fileContents = Storage::disk($disk)->get($filename);
-            
-            // Return the PDF with proper headers for download
             $safeOrderNumber = preg_replace('/[^a-zA-Z0-9_-]/', '', $order->order_number);
-            return response($fileContents)
-                ->header('Content-Type', 'application/pdf')
-                ->header('Content-Disposition', 'attachment; filename="invoice-' . $safeOrderNumber . '.pdf"')
-                ->header('Content-Length', strlen($fileContents));
+            
+            return Storage::disk($disk)->download($filename, 'invoice-' . $safeOrderNumber . '.pdf');
                 
         } catch (\Exception $e) {
             \Log::error('Failed to download invoice', [

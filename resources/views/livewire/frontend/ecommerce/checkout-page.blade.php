@@ -150,4 +150,70 @@
             </div>
         @endif
     </div>
+
+    {{-- Coupon Conflict Confirmation Modal --}}
+    @if($showConfirmationModal)
+        <div class="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center p-4 z-50" x-data>
+            <div class="bg-white rounded-xl max-w-md w-full p-6">
+                {{-- Warning Icon --}}
+                <div class="w-16 h-16 bg-yellow-100 rounded-full flex items-center justify-center mx-auto mb-4">
+                    <svg class="w-8 h-8 text-yellow-600" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                        <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 9v2m0 4h.01m-6.938 4h13.856c1.54 0 2.502-1.667 1.732-3L13.732 4c-.77-1.333-2.694-1.333-3.464 0L3.34 16c-.77 1.333.192 3 1.732 3z"></path>
+                    </svg>
+                </div>
+                
+                {{-- Modal Title --}}
+                <h3 class="text-xl font-bold text-gray-900 mb-3 text-center">Coupon Conflict</h3>
+                
+                {{-- Message --}}
+                <p class="text-gray-600 mb-4 text-center">{{ $confirmationMessage }}</p>
+                
+                {{-- Coupons to be removed --}}
+                @if(!empty($couponsToRemove))
+                    <div class="bg-red-50 border border-red-200 rounded-lg p-3 mb-4">
+                        <div class="text-sm font-medium text-red-800 mb-2">
+                            {{ count($couponsToRemove) > 1 ? 'Coupons' : 'Coupon' }} to be removed:
+                        </div>
+                        <ul class="text-sm text-red-700 space-y-1">
+                            @foreach($oldCouponsDiscount as $couponInfo)
+                                <li class="flex justify-between items-center">
+                                    <span>• {{ $couponInfo['code'] }}</span>
+                                    <span class="font-semibold ml-2">-S${{ number_format($couponInfo['discount'], 2) }}</span>
+                                </li>
+                            @endforeach
+                        </ul>
+                    </div>
+                @endif
+                
+                {{-- New coupon discount info --}}
+                @if($newCouponDiscount > 0)
+                    <div class="bg-green-50 border border-green-200 rounded-lg p-3 mb-4">
+                        <div class="text-sm font-medium text-green-800 mb-2">
+                            New coupon discount:
+                        </div>
+                        <div class="text-sm text-green-700 flex justify-between items-center">
+                            <span>• {{ $pendingCouponCode }}</span>
+                            <span class="font-semibold ml-2">-S${{ number_format($newCouponDiscount, 2) }}</span>
+                        </div>
+                    </div>
+                @endif
+                
+                {{-- Action Buttons --}}
+                <div class="flex gap-3">
+                    <button 
+                        type="button"
+                        wire:click="cancelCouponApplication"
+                        class="flex-1 px-4 py-2 border border-gray-300 text-gray-700 rounded-lg font-medium hover:bg-gray-50 transition-colors duration-200">
+                        No, keep existing
+                    </button>
+                    <button 
+                        type="button"
+                        wire:click="confirmCouponApplication"
+                        class="flex-1 px-4 py-2 bg-blue-600 text-white rounded-lg font-medium hover:bg-blue-700 transition-colors duration-200">
+                        Yes, apply
+                    </button>
+                </div>
+            </div>
+        </div>
+    @endif
 </div>

@@ -810,7 +810,7 @@ class ProductManagement extends Component
             $this->compare_price = $variant->compare_price;
             $this->stock_quantity = $variant->stock_quantity;
             $this->min_quantity_alert = $variant->min_quantity_alert;
-            $this->max_quantity_per_order = ($this->product_type === 'addon') ? '10000' : $variant->max_quantity_per_order;
+            $this->max_quantity_per_order = ($this->product_type === 'addon') ? 10000 : $variant->max_quantity_per_order;
             $this->track_inventory = $variant->track_inventory;
             $this->allow_backorders = $variant->allow_backorders;
             $this->weight_kg = $variant->weight_kg;
@@ -2371,7 +2371,7 @@ class ProductManagement extends Component
         $this->compare_price = '';
         $this->stock_quantity = '';
         $this->min_quantity_alert = '';
-        $this->max_quantity_per_order = ($this->product_type === 'addon') ? '10000' : '';
+        $this->max_quantity_per_order = ($this->product_type === 'addon') ? 10000 : '';
         $this->track_inventory = true;
         $this->allow_backorders = false;
         $this->weight_kg = '';

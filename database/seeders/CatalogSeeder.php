@@ -22,8 +22,15 @@ class CatalogSeeder extends Seeder
             ],
             [
                 'id' => 2,
+                'name' => 'services',
+                'description' => 'Services Products',
+                'created_at' => now(),
+                'updated_at' => now(),
+            ],
+            [
+                'id' => 3,
                 'name' => 'room-booking',
-                'description' => 'Room Booking Catalog',
+                'description' => 'Room Booking Services',
                 'created_at' => now(),
                 'updated_at' => now(),
             ],

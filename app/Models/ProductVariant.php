@@ -21,6 +21,7 @@ class ProductVariant extends Model
         'selling_price',
         'compare_price',
         'stock_quantity',
+        'reserved_stock',
         'min_quantity_alert',
         'max_quantity_per_order',
         'track_inventory',
@@ -38,6 +39,7 @@ class ProductVariant extends Model
         'selling_price' => 'decimal:2',
         'compare_price' => 'decimal:2',
         'stock_quantity' => 'integer',
+        'reserved_stock' => 'integer',
         'min_quantity_alert' => 'integer',
         'max_quantity_per_order' => 'integer',
         'track_inventory' => 'boolean',
@@ -92,6 +94,11 @@ class ProductVariant extends Model
     public function inventoryLogs()
     {
         return $this->hasMany(InventoryLog::class, 'variant_id');
+    }
+
+    public function orderItems()
+    {
+        return $this->hasMany(\App\Models\OrderItem::class, 'variant_id');
     }
 
     // Scopes

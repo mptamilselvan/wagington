@@ -1,4 +1,7 @@
 <div class="min-h-screen bg-gray-50 lg:ml-72">
+    <!-- Flash Messages -->
+    <x-alert-component />
+    
     <!-- Header -->
     <div class="px-4 sm:px-6 py-2 mt-3">
         <div class="bg-white rounded-lg shadow-sm border border-gray-200">
@@ -98,7 +101,9 @@
                                 </svg>
                                 Mark Processing
                             </button>
-                            <button wire:click="openFulfillmentAction('shipped')" type="button" class="inline-flex items-center px-3 py-1.5 border border-gray-300 rounded-md text-sm font-medium text-gray-700 bg-white hover:bg-gray-50" wire:loading.attr="disabled">
+                            <button wire:click="openFulfillmentAction('shipped')" type="button" 
+                                class="inline-flex items-center px-3 py-1.5 border border-gray-300 rounded-md text-sm font-medium text-gray-700 bg-white hover:bg-gray-50" 
+                                wire:loading.attr="disabled">
                                 <svg class="w-4 h-4 mr-1" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                                     <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M8 7h12m0 0l-4-4m4 4l-4 4m0 6H4m0 0l4 4m-4-4l4-4"></path>
                                 </svg>
@@ -232,10 +237,29 @@
 
     <!-- Fulfillment Modal -->
     @if($showFulfillmentModal)
-        <div class="fixed inset-0 bg-gray-600 bg-opacity-50 overflow-y-auto h-full w-full z-50" wire:click="closeFulfillmentAction">
-            <div class="relative top-20 mx-auto p-5 border w-96 shadow-lg rounded-md bg-white" wire:click.stop>
+        <div 
+            x-data="{ 
+                init() {
+                    this.$el.focus();
+                    this.$watch('$wire.showFulfillmentModal', value => {
+                        if (!value) this.$refs.triggerButton?.focus();
+                    });
+                }
+            }"
+            x-trap.noscroll="true"
+            @keydown.window.escape="$wire.closeFulfillmentAction()"
+            class="fixed inset-0 bg-gray-600 bg-opacity-50 overflow-y-auto h-full w-full z-50" 
+            wire:click="closeFulfillmentAction"
+            role="dialog"
+            aria-modal="true"
+            aria-labelledby="fulfillment-modal-title"
+            tabindex="-1"
+        >
+            <div 
+                class="relative top-20 mx-auto p-5 border w-96 shadow-lg rounded-md bg-white" 
+                wire:click.stop
                 <div class="mt-3">
-                    <h3 class="text-lg font-medium text-gray-900 mb-4">
+                    <h3 id="fulfillment-modal-title" class="text-lg font-medium text-gray-900 mb-4">
                         @if($fulfillmentAction === 'processing')
                             Mark Items as Processing
                         @elseif($fulfillmentAction === 'shipped')
@@ -246,6 +270,38 @@
                             Mark Items as Handed Over
                         @endif
                     </h3>
+                    
+                    <!-- Error Messages -->
+                    @error('fulfillment')
+                        <div class="mb-4 bg-red-50 border-l-4 border-red-400 p-3 rounded">
+                            <div class="flex">
+                                <div class="flex-shrink-0">
+                                    <svg class="h-5 w-5 text-red-400" viewBox="0 0 20 20" fill="currentColor">
+                                        <path fill-rule="evenodd" d="M10 18a8 8 0 100-16 8 8 0 000 16zM8.707 7.293a1 1 0 00-1.414 1.414L8.586 10l-1.293 1.293a1 1 0 101.414 1.414L10 11.414l1.293 1.293a1 1 0 001.414-1.414L11.414 10l1.293-1.293a1 1 0 00-1.414-1.414L10 8.586 8.707 7.293z" clip-rule="evenodd" />
+                                    </svg>
+                                </div>
+                                <div class="ml-3">
+                                    <p class="text-sm text-red-700 whitespace-pre-line">{{ $message }}</p>
+                                </div>
+                            </div>
+                        </div>
+                    @enderror
+                    
+                    <!-- Info message for shipped action -->
+                    @if($fulfillmentAction === 'shipped')
+                        <div class="mb-4 bg-blue-50 border-l-4 border-blue-400 p-3 rounded">
+                            <div class="flex">
+                                <div class="flex-shrink-0">
+                                    <svg class="h-5 w-5 text-blue-400" viewBox="0 0 20 20" fill="currentColor">
+                                        <path fill-rule="evenodd" d="M18 10a8 8 0 11-16 0 8 8 0 0116 0zm-7-4a1 1 0 11-2 0 1 1 0 012 0zM9 9a1 1 0 000 2v3a1 1 0 001 1h1a1 1 0 100-2v-3a1 1 0 00-1-1H9z" clip-rule="evenodd" />
+                                    </svg>
+                                </div>
+                                <div class="ml-3">
+                                    <p class="text-sm text-blue-700">All items in "Processing" status must be shipped together with the same tracking number.</p>
+                                </div>
+                            </div>
+                        </div>
+                    @endif
                     
                     <!-- Item Selection -->
                     <div class="mb-4">
@@ -275,13 +331,14 @@
                                             <span class="text-sm text-gray-900">{{ $item->product_name }}</span>
                                             <span class="text-xs text-gray-500 ml-2">({{ $item->quantity }}x)</span>
                                             <span class="text-xs ml-2 px-2 py-0.5 rounded-full 
-                                                @if($item->fulfillment_status === 'pending') bg-gray-100 text-gray-800
+                                                @if($item->fulfillment_status === 'awaiting_stock') bg-red-100 text-red-800
+                                                @elseif($item->fulfillment_status === 'pending') bg-gray-100 text-gray-800
                                                 @elseif($item->fulfillment_status === 'processing') bg-yellow-100 text-yellow-800
                                                 @elseif($item->fulfillment_status === 'shipped') bg-blue-100 text-blue-800
                                                 @elseif($item->fulfillment_status === 'delivered') bg-green-100 text-green-800
                                                 @elseif($item->fulfillment_status === 'awaiting_handover') bg-purple-100 text-purple-800
                                                 @endif">
-                                                {{ ucfirst($item->fulfillment_status) }}
+                                                {{ ucfirst(str_replace('_', ' ', $item->fulfillment_status)) }}
                                             </span>
                                         </div>
                                     </div>
@@ -305,13 +362,14 @@
                                                         <span class="text-gray-700">{{ $addon->addon_name }}</span>
                                                         <span class="text-xs text-gray-500 ml-2">({{ $addon->quantity }}x)</span>
                                                         <span class="text-xs ml-2 px-2 py-0.5 rounded-full 
-                                                            @if($addon->fulfillment_status === 'pending') bg-gray-100 text-gray-800
+                                                            @if($addon->fulfillment_status === 'awaiting_stock') bg-red-100 text-red-800
+                                                            @elseif($addon->fulfillment_status === 'pending') bg-gray-100 text-gray-800
                                                             @elseif($addon->fulfillment_status === 'processing') bg-yellow-100 text-yellow-800
                                                             @elseif($addon->fulfillment_status === 'shipped') bg-blue-100 text-blue-800
                                                             @elseif($addon->fulfillment_status === 'delivered') bg-green-100 text-green-800
                                                             @elseif($addon->fulfillment_status === 'awaiting_handover') bg-purple-100 text-purple-800
                                                             @endif">
-                                                            {{ ucfirst($addon->fulfillment_status) }}
+                                                            {{ ucfirst(str_replace('_', ' ', $addon->fulfillment_status)) }}
                                                         </span>
                                                     </div>
                                                 </div>
@@ -340,6 +398,9 @@
                             <input type="text" wire:model="carrier" 
                                    class="w-full px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-blue-500"
                                    placeholder="e.g., FedEx, UPS, DHL">
+                            @error('carrier') 
+                                <span class="text-red-500 text-xs mt-1 block">{{ $message }}</span>
+                            @enderror
                         </div>
                     @endif
 
@@ -352,6 +413,7 @@
                         <button wire:click="processFulfillment" 
                                 wire:loading.attr="disabled"
                                 wire:loading.class="opacity-50 cursor-not-allowed"
+                                @if($fulfillmentAction === 'shipped' && $this->areAllShippableItemsShipped()) disabled @endif
                                 class="px-4 py-2 bg-blue-600 border border-transparent rounded-md text-sm font-medium text-white hover:bg-blue-700 focus:outline-none focus:ring-2 focus:ring-blue-500">
                             <span wire:loading.remove wire:target="processFulfillment">
                                 @if($fulfillmentAction === 'processing')
@@ -369,12 +431,6 @@
                             </span>
                         </button>
                     </div>
-                    
-                    @error('fulfillment') 
-                        <div class="mt-3 p-3 bg-red-50 border border-red-200 rounded-md">
-                            <span class="text-red-600 text-sm">{{ $message }}</span>
-                        </div>
-                    @enderror
                 </div>
             </div>
         </div>

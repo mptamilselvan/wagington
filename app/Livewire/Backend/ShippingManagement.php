@@ -26,11 +26,11 @@ class ShippingManagement extends Component
 
     // Form Properties
     public $region = '';
-    public $weight_min = null;
-    public $weight_max = null;
-    public $volume_min = null;
-    public $volume_max = null;
-    public $cost = null;
+    public $weight_min = '';
+    public $weight_max = '';
+    public $volume_min = '';
+    public $volume_max = '';
+    public $cost = '';
 
     protected function rules()
     {

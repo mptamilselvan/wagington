@@ -18,6 +18,12 @@ use RuntimeException;
 use Stripe\Customer;
 use Stripe\PaymentMethod;
 use App\Services\VoucherService;
+//use App\CatalogEnum;
+use App\Models\CartRoomDetail;
+use App\Models\Room\RoomBookingModel;
+use App\Enums\CatalogEnum;
+use App\Enums\OrderPaymentStatusEnum;
+use App\Enums\RoomBookingStatusEnum;
 
 class CheckoutService
 {
@@ -141,18 +147,15 @@ class CheckoutService
     }
 
     /**
-     * Unified checkout method that accepts address IDs and optional payment method ID.
-     * Fetches address data from database to calculate shipping rates.
-     *
-     * @param array $cart Cart snapshot from ECommerceService->getCart()
-     * @param \App\Models\User $user Authenticated user (required for checkout)
-     * @param int|null $shippingAddressId User's saved shipping address ID (null if no shipping required)
-     * @param int $billingAddressId User's saved billing address ID
-     * @param string|null $paymentMethodId Optional Stripe payment method ID (defaults to user's default)
-     * @param string|null $sessionToken Guest session token for clearing guest cart
-     * @param array|null $address Optional additional address data (e.g., coupon_code)
-     * @return array { order: Order }
-     * @throws RuntimeException on validation or payment failure
+     * Evaluate and recalculate checkout totals with coupons, including tax and shipping.
+     * 
+     * @param array $cart Cart snapshot containing items and their details
+     * @param array $couponCodes Array of coupon codes to apply to the checkout
+     * @param float $subtotal Pre-calculated cart subtotal
+     * @param float $shippingAmount Current shipping amount, may be recalculated if region provided
+     * @param array|string|null $regionContext Region code string or array containing region info
+     * @param int|null $userId Optional user ID for coupon validation
+     * @return array Checkout evaluation result containing totals, applied vouchers, and any errors
      */
     public function evaluateCheckoutSummary(
         array $cart,
@@ -570,6 +573,74 @@ class CheckoutService
             $hasPartiallyBackordered = false;
 
             foreach ($updatedCart['items'] as &$it) {
+                $catalogId = isset($it['catalog_id']) ? (int)$it['catalog_id'] : CatalogEnum::PRODUCT->value;
+                
+                // Handle room booking items (catalog_id = 3) - they don't have variants and don't need inventory reservation
+                if ($catalogId === CatalogEnum::ROOM_BOOKING->value) {
+                    $qty = (int) ($it['qty'] ?? 1);
+                    $it['reserved_quantity'] = 0; // Room bookings don't have inventory to reserve
+                    $hasInStock = true;
+                    
+                    // Process addons for room booking items (if any)
+                    foreach (($it['addons'] ?? []) as &$ad) {
+                        $adVarId = (int)($ad['variant_id'] ?? 0);
+                        if ($adVarId <= 0) { continue; }
+                        $adVariant = $variants[$adVarId] ?? null;
+                        if (!$adVariant) { $invalidItems[] = ['addon' => $ad, 'parent' => $it]; continue; }
+                        
+                        \Log::info('ReserveCart: Addon inventory status check', [
+                            'addon_variant_id' => $adVarId,
+                            'stock_quantity' => (int)($adVariant->stock_quantity ?? 0),
+                            'reserved_stock' => (int)($adVariant->reserved_stock ?? 0),
+                            'on_hand' => max(0, (int)($adVariant->stock_quantity ?? 0) - (int)($adVariant->reserved_stock ?? 0)),
+                            'requested_qty' => (int)($ad['qty'] ?? 1),
+                        ]);
+
+                        $adQty = (int)($ad['qty'] ?? 1);
+                        $adInStock = $adQty;
+                        
+                        if ($adVariant->track_inventory) {
+                            if (!isset($transactionalStock[$adVarId])) {
+                                $transactionalStock[$adVarId] = max(0, (int)$adVariant->stock_quantity - (int)$adVariant->reserved_stock);
+                            }
+                            
+                            $adInStock = min($adQty, $transactionalStock[$adVarId]);
+                            
+                            if (!$adVariant->allow_backorders && $adInStock < $adQty) {
+                                $invalidItems[] = ['addon' => $ad, 'parent' => $it];
+                                continue;
+                            }
+                            
+                            $transactionalStock[$adVarId] -= $adInStock;
+                            
+                            $reservedMap[$adVarId] = (int)(($reservedMap[$adVarId] ?? 0) + $adInStock);
+                            if ($adInStock < $adQty) { 
+                                \Log::info('ReserveCart: Backorder detected for addon', ['addon_variant_id' => $adVarId, 'in_stock' => $adInStock, 'requested_qty' => $adQty]);
+                                // Updated logic to set the correct flag
+                                 if ($adInStock > 0) {
+                                    $hasPartiallyBackordered = true;
+                                } else {
+                                    $hasBackordered = true;
+                                }
+                            }
+                        } else {
+                            $reservedMap[$adVarId] = (int)($reservedMap[$adVarId] ?? 0);
+                            $hasInStock = true;
+                        }
+                        
+                        $ad['reserved_quantity'] = $adInStock;
+                    }
+                    
+                    // Calculate subtotal for room booking item
+                    $line = (float)($it['subtotal'] ?? 0);
+                    foreach (($it['addons'] ?? []) as $ad) {
+                        $line += (float) ($ad['subtotal'] ?? 0);
+                    }
+                    $subtotal += $line;
+                    continue; // Skip to next item
+                }
+                
+                // Handle product items (catalog_id = 1) - they have variants and need inventory reservation
                 $variant = isset($it['variant_id']) ? ($variants[$it['variant_id']] ?? null) : null;
                 if (!$variant) { $invalidItems[] = $it; continue; }
 
@@ -920,29 +991,134 @@ class CheckoutService
             $tempReservedMap = $reservedMap;
 
             foreach ($cart['items'] as $it) {
-                $variant = ProductVariant::with('product')->find($it['variant_id']);
+                $catalogId = isset($it['catalog_id']) ? (int)$it['catalog_id'] : CatalogEnum::PRODUCT->value;
                 $reservedPart = (int)($it['reserved_quantity'] ?? 0);
+                $orderedQty = (int)($it['qty'] ?? 1);
                 
-                // Determine initial fulfillment status and quantity
-                $isShippable = $variant?->product->shippable ?? true;
-                $initialFulfillmentStatus = $isShippable ? 'pending' : 'awaiting_handover';
+                // Handle room booking items (catalog_id = 3) - create room_booking record instead of order_item
+                if ($catalogId === CatalogEnum::ROOM_BOOKING->value) {
+                    // Fetch CartRoomDetail from database to get all booking details
+                    $cartItemId = $it['cart_item_id'] ?? null;
+                    if (!$cartItemId) {
+                        \Log::warning('CheckoutService: Room booking item missing cart_item_id', ['item' => $it]);
+                        continue;
+                    }
+                    
+                    $cartRoomDetail = CartRoomDetail::with(['roomType', 'room'])->where('cart_item_id', $cartItemId)->first();
+                    if (!$cartRoomDetail) {
+                        \Log::warning('CheckoutService: CartRoomDetail not found for cart_item_id', ['cart_item_id' => $cartItemId]);
+                        continue;
+                    }
+                    
+                    // Get species_id from room_type
+                    $speciesId = $cartRoomDetail->roomType?->species_id ?? 0;
+                    if ($speciesId === 0) {
+                        // Try to get from first pet if available
+                        $petsReserved = $cartRoomDetail->pets_reserved ?? [];
+                        if (!empty($petsReserved) && is_array($petsReserved)) {
+                            $firstPet = is_array($petsReserved[0]) ? ($petsReserved[0]['pet_id'] ?? null) : $petsReserved[0];
+                            if ($firstPet) {
+                                $pet = \App\Models\Pet::find($firstPet);
+                                $speciesId = $pet?->species_id ?? 0;
+                            }
+                        }
+                    }
+
+                    // Determine payment status based on order status
+                    $paymentStatus = OrderPaymentStatusEnum::PROCESSING->value;
+                    $bookingStatus = RoomBookingStatusEnum::PENDING->value;
+                    if ($order->payment_status === 'paid') {
+                        $paymentStatus = OrderPaymentStatusEnum::COMPLETED->value;
+                        $bookingStatus = RoomBookingStatusEnum::CONFIRMED->value;
+                    } elseif ($order->payment_status === 'failed') {
+                        $paymentStatus = OrderPaymentStatusEnum::FAILED->value;
+                        $bookingStatus = RoomBookingStatusEnum::CANCELLED->value;
+                    }
+                    
+                    // Determine if peak season, off day, weekend (can be enhanced later with date checking)
+                    $isPeakSeason = false; // TODO: Add logic to determine peak season
+                    $isOffDay = false; // TODO: Add logic to determine off day
+                    $isWeekend = false; // TODO: Add logic to determine weekend
+                    
+                    // Calculate total price including addons
+                    $totalPrice = (float)($cartRoomDetail->total_price ?? ($it['subtotal'] ?? 0));
+                    
+                    // Create room booking record
+                    $roomBooking = RoomBookingModel::create([
+                        'room_id' => $cartRoomDetail->room_id,
+                        'room_type_id' => $cartRoomDetail->room_type_id,
+                        'customer_id' => $user->id,
+                        'order_id' => $order->id,
+                        'order_number' => $order->order_number,
+                        'room_price' => (float)($cartRoomDetail->room_price ?? $it['unit_price'] ?? 0),
+                        'room_price_label' => null, // Can be set if needed
+                        'pets_reserved' => $cartRoomDetail->pets_reserved,
+                        'species_id' => $speciesId,
+                        'pet_quantity' => (int)($cartRoomDetail->pet_quantity ?? $it['qty'] ?? 1),
+                        'service_addons' => $cartRoomDetail->service_addons ?? [],
+                        'is_peak_season' => $isPeakSeason,
+                        'is_off_day' => $isOffDay,
+                        'is_weekend' => $isWeekend,
+                        'check_in_date' => $cartRoomDetail->check_in_date,
+                        'check_out_date' => $cartRoomDetail->check_out_date,
+                        'no_of_days' => (int)($cartRoomDetail->no_of_days ?? 0),
+                        'service_charge' => (float)($cartRoomDetail->service_charge ?? 0),
+                        'total_price' => $totalPrice,
+                        'payment_status' => $paymentStatus,
+                        'booking_status' => $bookingStatus,
+                        'payment_method' => null, // Will be set after payment
+                        'payment_reference' => $order->order_number, // Link to order
+                        'created_by' => $user->id,
+                        'updated_by' => $user->id,
+                    ]);
+                    
+                    \Log::info('CheckoutService: Room booking created', [
+                        'room_booking_id' => $roomBooking->id,
+                        'cart_item_id' => $cartItemId,
+                        'room_id' => $cartRoomDetail->room_id,
+                        'order_number' => $order->order_number,
+                    ]);
+                    
+                    // Skip addons processing for room bookings - they're already in service_addons JSON
+                    continue;
+                }
+                
+                // Handle product items (catalog_id = 1) - they have variants
+                $variant = ProductVariant::with('product')->find($it['variant_id']);
+                
+                if (!$variant) {
+                    \Log::warning('CheckoutService: Variant not found for product item', ['variant_id' => $it['variant_id'] ?? null]);
+                    continue;
+                }
+                
+                // Determine initial fulfillment status based on stock availability
+                $isShippable = $variant->product->shippable ?? true;
+                
+                // If reserved_quantity < quantity, item is backordered, set status to 'awaiting_stock'
+                if ($reservedPart < $orderedQty) {
+                    $initialFulfillmentStatus = 'awaiting_stock';
+                } else {
+                    // Full stock available - use normal status
+                    $initialFulfillmentStatus = $isShippable ? 'pending' : 'awaiting_handover';
+                }
+                
                 // fulfilled_quantity should be 0 initially, even for non-shippable items
                 $initialFulfilledQuantity = 0;
 
                 $oi = OrderItem::create([
                     'order_id' => $order->id,
-                    'product_id' => $variant?->product_id,
-                    'variant_id' => $variant?->id,
+                    'product_id' => $variant->product_id,
+                    'variant_id' => $variant->id,
                     'product_name' => $it['name'],
-                    'variant_display_name' => $it['variant_display_name'] ?? \App\Services\ECommerceService::formatVariantName($variant?->variant_attributes ?? []),
-                    'sku' => $variant?->sku,
-                    'product_attributes' => $variant?->variant_attributes ?? [],
-                    'quantity' => $it['qty'],
+                    'variant_display_name' => $it['variant_display_name'] ?? \App\Services\ECommerceService::formatVariantName($variant->variant_attributes ?? []),
+                    'sku' => $variant->sku,
+                    'product_attributes' => $variant->variant_attributes ?? [],
+                    'quantity' => $orderedQty,
                     'reserved_quantity' => $reservedPart,
                     'fulfilled_quantity' => $initialFulfilledQuantity,
                     'fulfillment_status' => $initialFulfillmentStatus,
                     'unit_price' => $it['unit_price'],
-                    'total_price' => (float)$it['unit_price'] * (int)$it['qty'],
+                    'total_price' => (float)$it['unit_price'] * $orderedQty,
                 ]);
 
                 foreach (($it['addons'] ?? []) as $ad) {
@@ -962,7 +1138,16 @@ class CheckoutService
                     ]);
                     
                     $addonProduct = \App\Models\Product::find($ad['product_id'] ?? null);
-                    $addonFulfillmentStatus = $addonProduct?->shippable ? 'pending' : 'awaiting_handover';
+                    
+                    // Determine addon fulfillment status based on stock availability
+                    if ($reservedForThisAddon < $addonQty) {
+                        // Addon is backordered
+                        $addonFulfillmentStatus = 'awaiting_stock';
+                    } else {
+                        // Full stock available - use normal status
+                        $addonFulfillmentStatus = $addonProduct?->shippable ? 'pending' : 'awaiting_handover';
+                    }
+                    
                     // fulfilled_quantity should be 0 initially, even for non-shippable addons
                     $addonFulfilledQuantity = 0;
                     
@@ -985,7 +1170,9 @@ class CheckoutService
 
                 \Log::info('CheckoutService: Main order item created', [
                     'order_item_id' => $oi->id,
-                    'variant_id' => $it['variant_id'],
+                    'catalog_id' => $catalogId,
+                    'variant_id' => $it['variant_id'] ?? null,
+                    'product_id' => $it['product_id'] ?? null,
                     'quantity' => $it['qty'],
                     'reserved_quantity' => $reservedPart,
                 ]);

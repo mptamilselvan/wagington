@@ -15,12 +15,13 @@ class ServicePricingAttributesSeeder extends Seeder
     {
         ServicePricingAttributes::truncate();
         ServicePricingAttributes::insert([
-            ['key' => 'Label','value' => 'text'],
-            ['key' => 'Number of Pets','value' => 'Intger'],
-            ['key' => 'Number of Humans','value' => 'Intger'],
-            ['key' => 'Duration','value' => 'time'],
-            ['key' => 'Price','value' => 'decimal'],
-            ['key' => 'Distance Range','value' => 'decimal'],
+            ['key' => 'label','value' => 'Label','data_type' => 'text'],
+            ['key' => 'no_pets','value' => 'Number of Pets','data_type' => 'Intger'],
+            ['key' => 'no_humans','value' => 'Number of Humans','data_type' => 'Intger'],
+            ['key' => 'duration','value' => 'Duration','data_type' => 'Intger'],
+            ['key' => 'price','value' => 'Price','data_type' => 'decimal'],
+            ['key' => 'km_start','value' => 'Distance Range (KM Start)','data_type' => 'decimal'],
+            ['key' => 'km_end','value' => 'Distance Range  (KM End)','data_type' => 'decimal'],
         ]);
     }
 }

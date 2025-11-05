@@ -22,22 +22,17 @@ class ProcessSessionTokenHeader
         if ($sessionToken) {
             // Validate token format and length
             if (!is_string($sessionToken) || strlen($sessionToken) > 255 || !ctype_alnum(str_replace(['-', '_'], '', $sessionToken))) {
-                Log::warning('ProcessSessionTokenHeader: Invalid X-Session-Token format', [
-                    'session_id' => Session::getId(),
-                ]);
+                Log::warning('ProcessSessionTokenHeader: Invalid X-Session-Token format');
                 return $next($request);
             }
             
-            Log::info('ProcessSessionTokenHeader: Found X-Session-Token header', [
-                'session_token_present' => true,
-                'session_id' => Session::getId(),
+            Log::debug('ProcessSessionTokenHeader: Found X-Session-Token header', [
+                'session_token_present' => true
             ]);
             
             Session::put('guest.session_token', $sessionToken);
         } else {
-            Log::info('ProcessSessionTokenHeader: No X-Session-Token header found', [
-                'session_id' => Session::getId(),
-            ]);
+            Log::debug('ProcessSessionTokenHeader: No X-Session-Token header found');
         }
         return $next($request);
     }

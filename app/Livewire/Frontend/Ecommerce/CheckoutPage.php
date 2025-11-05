@@ -44,6 +44,16 @@ class CheckoutPage extends Component
     public float $totalCouponDiscount = 0.0;
     public string $couponMessage = '';
     public int $maxCoupons = 5;
+    
+    // Confirmation modal for stackability conflicts
+    public bool $showConfirmationModal = false;
+    public string $confirmationMessage = '';
+    public string $pendingCouponCode = '';
+    public array $couponsToRemove = [];
+    public string $conflictType = '';
+    public array $oldCouponsDiscount = []; // Stores discount info for coupons to be removed
+    public float $newCouponDiscount = 0.0; // Discount amount for the new coupon
+    public array $comparisonData = []; // Stores cost comparison data for confirmation modal
 
     // Derived, read-only at service level; Livewire passes code explicitly to service
 
@@ -81,6 +91,12 @@ class CheckoutPage extends Component
         $this->maxCoupons = config('app.max_coupons', 5);
         
         $this->cart = $svc->getCart();
+
+        // Auto-fill coupon code from URL query parameter
+        $couponFromUrl = request()->query('coupon');
+        if (!empty($couponFromUrl)) {
+            $this->currentCouponInput = trim($couponFromUrl);
+        }
 
         if (Auth::check()) {
             $user = Auth::user();
@@ -272,6 +288,13 @@ class CheckoutPage extends Component
         // Check maximum limit
         if (count($this->couponCodes) >= $this->maxCoupons) {
             $this->couponMessage = "Max {$this->maxCoupons} coupons allowed";
+            return;
+        }
+
+        // Check for stackability conflicts BEFORE applying
+        $conflictCheck = $this->checkCouponConflict($code);
+        if ($conflictCheck['has_conflict']) {
+            $this->showConfirmationModal($conflictCheck, $code);
             return;
         }
 
@@ -535,6 +558,224 @@ class CheckoutPage extends Component
         } finally {
             $this->loading = false;
         }
+    }
+
+    /**
+     * Check if the new coupon has stackability conflicts with existing coupons
+     * Provides enhanced cost comparison data for user decision-making
+     */
+    private function checkCouponConflict(string $newCode): array
+    {
+        if (empty($this->couponCodes)) {
+            return ['has_conflict' => false];
+        }
+
+        $voucherService = app(\App\Services\VoucherService::class);
+        $userId = Auth::id();
+
+        // Validate the new coupon
+        try {
+            $newVoucher = $voucherService->validateVoucher(['voucher_code' => $newCode], $userId);
+            $newVoucherData = $newVoucher['data'];
+        } catch (\Exception $e) {
+            return ['has_conflict' => false]; // Invalid coupon, will fail in normal validation
+        }
+
+        // Validate existing coupons
+        $existingVouchers = [];
+        foreach ($this->couponCodes as $code) {
+            try {
+                $result = $voucherService->validateVoucher(['voucher_code' => strtoupper($code)], $userId);
+                $existingVouchers[] = $result['data'];
+            } catch (\Exception $e) {
+                // Skip invalid existing coupons
+            }
+        }
+
+        if (empty($existingVouchers)) {
+            return ['has_conflict' => false];
+        }
+
+        $newIsStackable = (bool) ($newVoucherData['stackable'] ?? false);
+        $existingStackable = array_filter($existingVouchers, fn($v) => $v['stackable']);
+        $existingNonStackable = array_filter($existingVouchers, fn($v) => !$v['stackable']);
+        
+        // Calculate cart subtotal and current discounted total
+        $subtotal = $this->calculateCartSubtotal($this->cart);
+        $currentDiscountedTotal = $subtotal - $this->totalCouponDiscount;
+        
+        // Helper function to calculate discount for a voucher
+        $calculateDiscount = function($voucher, $amount) {
+            if ($voucher['discount_type'] === 'percentage') {
+                return round(($amount * $voucher['discount_value']) / 100, 2);
+            } else {
+                return round(min($voucher['discount_value'], $amount), 2);
+            }
+        };
+        
+        // Calculate potential new discount (on current subtotal after removing conflicting discounts)
+        $newCouponDiscount = $calculateDiscount($newVoucherData, max(0, $subtotal));
+        
+        // Function to get detailed discount info for coupons being removed
+        $getOldCouponsDiscount = function($couponsToRemove) {
+            $discountInfo = [];
+            $totalOldDiscount = 0.0;
+            foreach ($this->appliedCoupons as $coupon) {
+                if (in_array($coupon['code'], $couponsToRemove)) {
+                    $discountInfo[] = [
+                        'code' => $coupon['code'],
+                        'type' => $coupon['type'],
+                        'value' => $coupon['value'],
+                        'discount' => $coupon['discount'] ?? 0
+                    ];
+                    $totalOldDiscount += (float)($coupon['discount'] ?? 0);
+                }
+            }
+            return [
+                'details' => $discountInfo,
+                'total' => $totalOldDiscount
+            ];
+        };
+
+        // Helper to format currency for messages
+        $formatCurrency = fn($amount) => 'S$' . number_format($amount, 2);
+
+        // Function to build comparison data
+        $buildComparison = function($couponsToRemove, $message) use (
+            $subtotal, 
+            $getOldCouponsDiscount, 
+            $newCouponDiscount, 
+            $currentDiscountedTotal,
+            $formatCurrency
+        ) {
+            $oldCouponsDiscount = $getOldCouponsDiscount($couponsToRemove);
+            $newTotal = $subtotal - $newCouponDiscount;
+            
+            // Calculate net impact
+            $netImpact = ($currentDiscountedTotal) - $newTotal;
+            $savingsText = $netImpact > 0 
+                ? "You'll save an additional " . $formatCurrency($netImpact)
+                : "You'll pay " . $formatCurrency(abs($netImpact)) . " more";
+                
+            $detailedMessage = $message . "\n\n" .
+                "Current total: " . $formatCurrency($currentDiscountedTotal) . "\n" .
+                "New total with " . strtoupper($this->pendingCouponCode) . ": " . $formatCurrency($newTotal) . "\n" .
+                $savingsText;
+            
+            return [
+                'has_conflict' => true,
+                'conflict_type' => 'non_stackable_over_stackable',
+                'message' => $detailedMessage,
+                'coupons_to_remove' => $couponsToRemove,
+                'old_coupons_discount' => $oldCouponsDiscount['details'],
+                'old_total_discount' => $oldCouponsDiscount['total'],
+                'new_coupon_discount' => $newCouponDiscount,
+                'current_total' => $currentDiscountedTotal,
+                'new_total' => $newTotal,
+                'net_impact' => $netImpact,
+                'subtotal' => $subtotal
+            ];
+        };
+
+        // Scenario 1: Applying non-stackable when stackable coupons exist
+        if (!$newIsStackable && !empty($existingStackable)) {
+            $couponsToRemove = array_map(fn($v) => $v['voucher_code'], $existingStackable);
+            return $buildComparison(
+                $couponsToRemove,
+                'You are trying to apply a non-stackable coupon. This will remove all previously applied stackable coupons.'
+            );
+        }
+
+        // Scenario 2: Applying stackable when non-stackable coupon exists
+        if ($newIsStackable && !empty($existingNonStackable)) {
+            $couponsToRemove = array_map(fn($v) => $v['voucher_code'], $existingNonStackable);
+            return $buildComparison(
+                $couponsToRemove,
+                'A non-stackable coupon is already applied. Stackable coupons cannot be combined with it. Adding this coupon will remove all currently applied non-stackable coupons.'
+            );
+        }
+
+        // Scenario 3: Applying non-stackable when non-stackable coupon exists (replacement)
+        if (!$newIsStackable && !empty($existingNonStackable)) {
+            $couponsToRemove = array_map(fn($v) => $v['voucher_code'], $existingNonStackable);
+            return $buildComparison(
+                $couponsToRemove,
+                'A non-stackable coupon is already applied. Applying this new coupon will replace the existing non-stackable coupon.'
+            );
+        }
+
+        return ['has_conflict' => false];
+    }
+
+    /**
+     * Show confirmation modal for coupon conflict with enhanced cost comparison
+     * Displays clear before/after totals and savings impact
+     */
+    private function showConfirmationModal(array $conflictData, string $newCode): void
+    {
+        $this->showConfirmationModal = true;
+        $this->confirmationMessage = $conflictData['message'];
+        $this->pendingCouponCode = $newCode;
+        $this->couponsToRemove = $conflictData['coupons_to_remove'];
+        $this->conflictType = $conflictData['conflict_type'];
+        $this->oldCouponsDiscount = $conflictData['old_coupons_discount'] ?? [];
+        $this->newCouponDiscount = $conflictData['new_coupon_discount'] ?? 0.0;
+        
+        // Store additional cost comparison data
+        $this->comparisonData = [
+            'current_total' => $conflictData['current_total'] ?? 0.0,
+            'new_total' => $conflictData['new_total'] ?? 0.0,
+            'net_impact' => $conflictData['net_impact'] ?? 0.0,
+            'subtotal' => $conflictData['subtotal'] ?? 0.0,
+            'old_total_discount' => $conflictData['old_total_discount'] ?? 0.0
+        ];
+    }
+
+    /**
+     * User confirmed - apply the new coupon and remove conflicting ones
+     */
+    public function confirmCouponApplication()
+    {
+        $this->showConfirmationModal = false;
+        
+        // Remove conflicting coupons
+        $remainingCodes = array_diff($this->couponCodes, $this->couponsToRemove);
+        
+        // Add new coupon
+        $proposedCodes = array_values(array_unique(array_merge($remainingCodes, [$this->pendingCouponCode])));
+        $summary = $this->evaluateSummary($proposedCodes);
+
+        if (!empty($summary['errors'])) {
+            $this->couponMessage = collect($summary['errors'])->first();
+        } else {
+            $this->applySummary($summary, $this->formatCouponAppliedMessage($summary, $this->pendingCouponCode, count($proposedCodes)));
+            $this->currentCouponInput = '';
+        }
+
+        // Clear confirmation state
+        $this->resetConfirmationState();
+    }
+
+    /**
+     * User cancelled - keep existing coupons
+     */
+    public function cancelCouponApplication()
+    {
+        $this->showConfirmationModal = false;
+        $this->couponMessage = 'Cancelled. Existing coupons kept.';
+        $this->currentCouponInput = '';
+        $this->resetConfirmationState();
+    }
+
+    /**
+     * Reset confirmation modal state
+     */
+    private function resetConfirmationState(): void
+    {
+        $this->pendingCouponCode = '';
+        $this->couponsToRemove = [];
+        $this->conflictType = '';
+        $this->confirmationMessage = '';
     }
 
     public function render()

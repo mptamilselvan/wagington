@@ -206,14 +206,14 @@ class OrderController extends Controller
     {
         $user = Auth::user();
         
-        // Find the order that belongs to the user
-        $order = Order::where('order_number', $orderNumber)
-            ->where('user_id', $user->id)
-            ->firstOrFail();
-            
         try {
-            // Begin transaction and lock the payment row
-            $result = \DB::transaction(function() use ($order) {
+            // Begin transaction and get the order with lock
+            $result = \DB::transaction(function() use ($user, $orderNumber) {
+                // Find the order that belongs to the user inside transaction
+                $order = Order::where('order_number', $orderNumber)
+                    ->where('user_id', $user->id)
+                    ->lockForUpdate()
+                    ->firstOrFail();
                 // Get and lock the first payment for this order
                 $payment = $order->payments()
                     ->lockForUpdate()

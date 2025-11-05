@@ -35,8 +35,24 @@ class GenerateMissingInvoices extends Command
         if ($orderNumber) {
             // Generate invoice for a specific order
             $this->info("Generating invoice for order: {$orderNumber}");
-            $order = Order::where('order_number', $orderNumber)->first();
-            
+
+            // Eager-load payments for the specific order so generateInvoiceForOrder
+            // doesn't issue an extra query when accessing $order->payments.
+            $order = Order::where('order_number', $orderNumber)
+                ->with(['payments' => function ($query) use ($force) {
+                    $query->where('status', 'succeeded');
+
+                    if (!$force) {
+                        // Only eager load payments that need invoices when not forcing
+                        $query->where(function ($q) {
+                            $q->whereNull('invoice_url')
+                              ->orWhereNull('invoice_pdf_url')
+                              ->orWhere('invoice_url', '')
+                              ->orWhere('invoice_pdf_url', '');
+                        });
+                    }
+                }])->first();
+
             if (!$order) {
                 $this->error("Order not found: {$orderNumber}");
                 return 1;
@@ -49,29 +65,28 @@ class GenerateMissingInvoices extends Command
             $this->info('Generating invoices for all orders missing them...');
             
             // Find orders with successful payments but missing invoice information
-            $query = Order::whereHas('payments', function ($query) {
+            // Reusable predicate for payments that are missing invoice data
+            $force = $force; // ensure $force is in scope for the closures below (kept for clarity)
+            $invoiceMissingFilter = function ($q) {
+                $q->whereNull('invoice_url')
+                  ->orWhereNull('invoice_pdf_url')
+                  ->orWhere('invoice_url', '')
+                  ->orWhere('invoice_pdf_url', '');
+            };
+
+            $query = Order::whereHas('payments', function ($query) use ($invoiceMissingFilter, $force) {
                 $query->where('status', 'succeeded');
-                
-                if (!$this->option('force')) {
+
+                if (!$force) {
                     // Only look for payments missing invoice info when not forcing
-                    $query->where(function ($q) {
-                        $q->whereNull('invoice_url')
-                          ->orWhereNull('invoice_pdf_url')
-                          ->orWhere('invoice_url', '')
-                          ->orWhere('invoice_pdf_url', '');
-                    });
+                    $query->where($invoiceMissingFilter);
                 }
-            })->with(['payments' => function ($query) {
+            })->with(['payments' => function ($query) use ($invoiceMissingFilter, $force) {
                 $query->where('status', 'succeeded');
-                
-                if (!$this->option('force')) {
+
+                if (!$force) {
                     // Only eager load payments that need invoices
-                    $query->where(function ($q) {
-                        $q->whereNull('invoice_url')
-                          ->orWhereNull('invoice_pdf_url')
-                          ->orWhere('invoice_url', '')
-                          ->orWhere('invoice_pdf_url', '');
-                    });
+                    $query->where($invoiceMissingFilter);
                 }
             }]);
             

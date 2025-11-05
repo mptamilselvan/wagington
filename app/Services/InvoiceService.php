@@ -4,6 +4,7 @@ namespace App\Services;
 
 use App\Models\Order;
 use App\Models\Payment;
+use App\Models\Room\RoomBookingModel;
 use setasign\Fpdi\Fpdi;
 use Illuminate\Support\Facades\Storage;
 use Illuminate\Support\Facades\Log;
@@ -268,7 +269,41 @@ class InvoiceService
             $pdf->Cell(30, 6, '$0.00', 1, 0, 'R');
             $pdf->Cell(35, 6, '$0.00', 1, 1, 'R');
         }
-        
+        // Append room booking entries (catalog 3)
+        try {
+            $bookings = RoomBookingModel::with(['roomType','room'])
+                ->where('order_id', $order->id)
+                ->get();
+            if ($bookings && $bookings->count() > 0) {
+                foreach ($bookings as $rb) {
+                    $name = 'Room Booking - ' . ($rb->roomType->name ?? ($rb->room->name ?? 'Room'));
+                    $qty = 1;
+                    $unit = (float)($rb->room_price ?? 0);
+                    $total = (float)($rb->total_price ?? 0);
+                    $pdf->Cell(80, 6, $name, 1, 0, 'L');
+                    $pdf->Cell(25, 6, $qty, 1, 0, 'C');
+                    $pdf->Cell(30, 6, '$' . number_format($unit, 2), 1, 0, 'R');
+                    $pdf->Cell(35, 6, '$' . number_format($total, 2), 1, 1, 'R');
+
+                    // Service addons under the booking, if any
+                    $addons = is_array($rb->service_addons) ? $rb->service_addons : [];
+                    foreach ($addons as $ad) {
+                        $adName = '  + ' . ($ad['title'] ?? 'Addon');
+                        $adPrice = (float)($ad['price'] ?? 0);
+                        $pdf->Cell(80, 6, $adName, 1, 0, 'L');
+                        $pdf->Cell(25, 6, 1, 1, 0, 'C');
+                        $pdf->Cell(30, 6, '$' . number_format($adPrice, 2), 1, 0, 'R');
+                        $pdf->Cell(35, 6, '$' . number_format($adPrice, 2), 1, 1, 'R');
+                    }
+                }
+            }
+        } catch (\Throwable $e) {
+            Log::error('InvoiceService: error adding room bookings to invoice', [
+                'order_id' => $order->id ?? null,
+                'error' => $e->getMessage(),
+            ]);
+        }
+
         $pdf->Ln(5);
     }
     

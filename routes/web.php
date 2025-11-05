@@ -43,6 +43,7 @@ use App\Livewire\Backend\Room\RoomPriceOption;
 use App\Livewire\Backend\Room\RoomType;
 use App\Livewire\Backend\Room\Room;
 use App\Livewire\Backend\Room\RoomWeekend;
+use App\Livewire\Backend\Room\RoomBooking;
 // The welcome page
 Route::get('/', function () {
     // If user is authenticated and has customer role, redirect to dashboard
@@ -211,6 +212,9 @@ Route::namespace('App\Livewire\Backend')->prefix('admin')->middleware(['auth', '
     // E-commerce: Shipping Management
     Route::get('/shipping-management', \App\Livewire\Backend\ShippingManagement::class)->name('shipping-management');
     
+    // E-commerce: Inventory Restock
+    Route::get('/inventory-restock', \App\Livewire\Backend\InventoryRestock::class)->name('inventory-restock');
+    
     Route::get('/ecommerce-settings', \App\Livewire\Backend\EcommerceSettings::class)->name('ecommerce-settings');
 
     Route::get('/role-settings', 'RoleSetting@index')->name('role-settings');
@@ -218,6 +222,7 @@ Route::namespace('App\Livewire\Backend')->prefix('admin')->middleware(['auth', '
    
     Route::get('/rooms', Room::class)->name('rooms');
     Route::get('/room-types', RoomType::class)->name('room-types');
+    Route::get('/room-bookings', RoomBooking::class)->name('room-bookings');
     Route::get('/pet-size-limit-settings', [PetSizeLimitSetting::class, 'index'])->name('pet-size-limit-settings');
     Route::get('/room-peak-seasons', [PeakSeason::class, 'index'])->name('room-peak-seasons');
     Route::get('/room-off-days', [OffDay::class, 'index'])->name('room-off-days');
@@ -267,6 +272,9 @@ Route::namespace('App\Livewire\Backend')->prefix('admin')->middleware(['auth', '
     Route::get('service-settings/peak-seasons', 'PeakSeason@index')->name('peak-season');
     Route::get('service-settings/off-days', 'OffDay@index')->name('off-days');
     Route::get('service-settings/booking-status-settings', 'BookingStatusSetting@index')->name('admin.booking-status-settings');
+    Route::get('service-settings/service-types', 'ServiceType@index')->name('admin.service-types');
+
+    Route::get('services', 'Service@index')->name('admin.services');
 
 });
 

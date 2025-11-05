@@ -9,13 +9,14 @@ use App\Models\ServiceSubcategory as ServiceSubcategoryModel;
 use App\Models\Servicecategory;
 use Auth;
 use Livewire\WithFileUploads;
+use Illuminate\Support\Str;
 
 class ServiceSubcategory extends Component
 {
     use WithFileUploads;
     protected $ServiceSubCategoryService;
 
-    public  $name,$description,$image,$src,$category_id,$meta_title,$meta_description,$meta_keywords,$focus_keywords, $created_by,$updated_by,$service_categories = [];
+    public  $name,$slug,$description,$image,$src,$category_id,$meta_title,$meta_description,$meta_keywords,$focus_keywords, $created_by,$updated_by,$service_categories = [];
     // public $size;
     public $editId = null, $deleteId = null;
 
@@ -60,12 +61,48 @@ class ServiceSubcategory extends Component
         return \App\Rules\ServiceSubCategoryRules::messages();
     }
 
+    /* --------------------------------------------------------------
+     * SLUG HANDLING
+     * -------------------------------------------------------------- */
+    // generate unique slug
+    public function generateUniqueSlug()
+    {
+        if (empty($this->name)) {
+            return '';
+        }
+
+        // Base slug
+        $baseSlug = Str::slug($this->name);
+
+        $slug = $baseSlug;
+        $counter = 1;
+
+        // Ensure uniqueness
+        while ($this->slugExists($slug)) {
+            $slug = $baseSlug . '-' . $counter;
+            $counter++;
+        }
+        return $this->slug = $slug;
+    }
+
+
+    // slug existence check
+    private function slugExists($slug)
+    {
+        $query = ServiceSubcategoryModel::where('slug', $slug);
+        
+        if ($this->editId) {
+            $query->where('id', '!=', $this->editId);
+        }
+        return $query->exists();
+    }
+
     public function save()
     {
         $this->name = ucfirst(strtolower($this->name));
         $this->validate(\App\Rules\ServiceSubCategoryRules::rules($this->editId));
         try {
-            $data = $this->only(['name','category_id','description','image','meta_title','meta_description','meta_keywords','focus_keywords']);
+            $data = $this->only(['name','category_id','description','image','meta_title','meta_description','meta_keywords','focus_keywords','slug']);
 
             if ($this->editId) {
                 $data['updated_by'] = Auth::id();
@@ -107,6 +144,7 @@ class ServiceSubcategory extends Component
             $subcategory= ServiceSubcategoryModel::findOrFail($id);
             $this->editId = $id;
             $this->name = $subcategory->name;
+            $this->slug = $subcategory->slug;
             $this->category_id = $subcategory->category_id;
             $this->src = $subcategory->image;
             $this->description = $subcategory->description;
@@ -144,6 +182,6 @@ class ServiceSubcategory extends Component
 
     public function resetFields()
     {
-        $this->reset(['name','category_id','description','image','meta_title','meta_description','meta_keywords','focus_keywords','editId','src']);
+        $this->reset(['name','category_id','description','image','meta_title','meta_description','meta_keywords','focus_keywords','editId','src','slug']);
     }
 }

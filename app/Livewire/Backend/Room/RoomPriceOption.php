@@ -32,6 +32,7 @@ class RoomPriceOption extends Component
         \session(['submenu' => 'room-price-options']);
         $this->petSizes = SizeModel::select('id as value','name as option')->get()->toArray();
         $this->roomTypes = RoomTypeModel::select('id as value','name as option')->orderBy('name')->get()->toArray();
+        $this->label = 'day'; // Set default value
     }
 
     public function render()
@@ -115,7 +116,8 @@ class RoomPriceOption extends Component
 
     public function resetFields()
     {
-        $this->reset(['label', 'no_of_days', 'price', 'pet_size_id', 'editId']);
+        $this->reset(['no_of_days', 'price', 'pet_size_id', 'editId']);
+        $this->label = 'day'; // Reset to default value
     }
     public function changedRoomType()
     {

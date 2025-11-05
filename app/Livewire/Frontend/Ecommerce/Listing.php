@@ -57,7 +57,6 @@ class Listing extends Component
     public function toggleFilterPanel()
     {
         $this->showFilterPanel = !$this->showFilterPanel;
-        \Log::info('Toggle filter panel', ['showFilterPanel' => $this->showFilterPanel]);
     }
 
     public function render()

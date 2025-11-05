@@ -208,18 +208,12 @@
 
                             <!-- CTA Button -->
                             <div class="mt-8">
-                                @component('components.button-component', [
-                                    'label' => 'Use Promo',
-                                    'id' => 'use_promo',
-                                    'type' => 'button',
-                                ])
-                                @endcomponent
-                                {{-- <button 
-                                    class="w-full bg-blue-500 text-white py-2.5 rounded-lg text-sm font-semibold hover:bg-blue-600 transition"
-                                    wire:click="applyPromo"
+                                <a 
+                                    href="{{ route('shop.checkout', ['coupon' => $voucherDetail->voucher_code]) }}"
+                                    class="block w-full bg-blue-500 text-white py-2.5 rounded-lg text-sm font-semibold hover:bg-blue-600 transition text-center"
                                 >
                                     Use Promo
-                                </button> --}}
+                                </a>
                             </div>
                         </div>
                     </div>

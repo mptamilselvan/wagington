@@ -104,25 +104,47 @@
                             @endif
                             
                             @if(!empty($it['addons']))
-                                <div class="mt-4 pt-3 border-t border-gray-100">
-                                    <div class="space-y-2">
-                                        @foreach($it['addons'] as $ad)
+                                <div class="mt-3 pt-3 border-t border-gray-100">
+                                    <div class="text-xs font-medium text-gray-600 mb-2">Add-ons:</div>
+                                    <div class="space-y-2 pl-3 border-l-2 border-gray-200">
+                                        @foreach($it['addons'] as $adIndex => $ad)
                                             @php
-                                                $addonName = $ad['name'] ?? $ad['product_name'] ?? null;
-                                                $addonName = is_string($addonName) && trim($addonName) !== '' ? trim($addonName) : __('Addon');
+                                                $addonName = $ad['name'] ?? $ad['product_name'] ?? 'Add-on';
                                             @endphp
-                                            <div class="flex items-center justify-between text-sm">
-                                                <div class="flex items-center gap-2">
-                                                    @if(!empty($ad['is_required']) && $ad['is_required'])
-                                                        <span class="px-1.5 py-0.5 text-[10px] uppercase tracking-wide text-red-600 bg-red-50 rounded">Required</span>
-                                                    @endif
-                                                    <span class="text-gray-700">{{ $addonName }}</span>
-                                                    @if(!empty($ad['variant_name']))
-                                                        <span class="text-gray-500">• {{ $ad['variant_name'] }}</span>
-                                                    @endif
-                                                    <span class="text-gray-500">× {{ $ad['qty'] }}</span>
+                                            <div class="flex items-start justify-between text-xs gap-2">
+                                                <div class="flex-1 min-w-0">
+                                                    <div class="flex items-center gap-1.5 mb-1">
+                                                        @if(!empty($ad['is_required']))
+                                                            <span class="px-1 py-0.5 text-[9px] uppercase font-semibold text-red-600 bg-red-50 rounded">Required</span>
+                                                        @endif
+                                                        <span class="text-gray-700 font-medium">{{ $addonName }}</span>
+                                                        @if(!empty($ad['variant_name']))
+                                                            <span class="text-gray-500">• {{ $ad['variant_name'] }}</span>
+                                                        @endif
+                                                    </div>
+                                                    <div class="text-[11px] text-gray-500">@ S${{ number_format($ad['unit_price'] ?? 0, 2) }}</div>
                                                 </div>
-                                                <div class="font-medium text-gray-900">S$ {{ number_format($ad['subtotal'] ?? 0, 2) }}</div>
+                                                <div class="flex items-center gap-2">
+                                                    <input 
+                                                        type="number" 
+                                                        min="1" 
+                                                        max="999" 
+                                                        wire:model.live="cart.items.{{ $loop->parent->index }}.addons.{{ $loop->index }}.qty"
+                                                        class="w-14 text-center border rounded py-0.5 text-xs"
+                                                    />
+                                                    <div class="w-16 text-right font-medium text-gray-900">S${{ number_format($ad['subtotal'] ?? 0, 2) }}</div>
+                                                    @if(empty($ad['is_required']))
+                                                        <button 
+                                                            wire:click="removeAddon({{ $loop->parent->index }}, {{ $loop->index }})" 
+                                                            class="text-red-600 hover:text-red-800 text-[10px]"
+                                                            title="Remove add-on"
+                                                        >
+                                                            ✕
+                                                        </button>
+                                                    @else
+                                                        <div class="w-3"></div>
+                                                    @endif
+                                                </div>
                                             </div>
                                         @endforeach
                                     </div>
@@ -137,15 +159,26 @@
         </div>
 
         <div class="p-4 border-t bg-white space-y-3">
-            <!-- Compact per-item totals only -->
+            <!-- Compact per-item totals including add-ons -->
             @php
                 $rows = [];
                 foreach (($cart['items'] ?? []) as $it) {
+                    // Main item
                     $labelName = $it['name'] ?? $it['product_name'] ?? null;
                     $labelName = is_string($labelName) && trim($labelName) !== '' ? trim($labelName) : __('Item');
                     $variantSuffix = !empty($it['variant_display_name']) ? ' (' . $it['variant_display_name'] . ')' : '';
                     $label = $labelName . $variantSuffix . ' × ' . ($it['qty'] ?? 1);
                     $rows[] = ['label' => $label, 'total' => (float)($it['subtotal'] ?? 0)];
+                    
+                    // Add-ons as separate line items
+                    if (!empty($it['addons']) && is_array($it['addons'])) {
+                        foreach ($it['addons'] as $addon) {
+                            $addonName = $addon['name'] ?? $addon['product_name'] ?? 'Add-on';
+                            $addonVariantSuffix = !empty($addon['variant_name']) ? ' (' . $addon['variant_name'] . ')' : '';
+                            $addonLabel = '  + ' . $addonName . $addonVariantSuffix . ' × ' . ($addon['qty'] ?? 1);
+                            $rows[] = ['label' => $addonLabel, 'total' => (float)($addon['subtotal'] ?? 0)];
+                        }
+                    }
                 }
                 $grand = (float)($cart['total'] ?? 0);
             @endphp

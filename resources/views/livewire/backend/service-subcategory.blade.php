@@ -28,9 +28,21 @@
                         'wireModel' => 'name',
                         'id' => 'name',
                         'label' => 'SubCategory Name',
-                        'star' => true,      
+                        'star' => true,
+                        'wireOnBlur' =>  'generateUniqueSlug()',
                         'placeholder' => 'Enter SubCategory name',              
                         'error' => $errors->first('name'),
+                    ])
+                    @endcomponent
+
+                    @component('components.textbox-component', [
+                        'wireModel' => 'slug',
+                        'id' => 'slug',
+                        'label' => 'Slug',
+                        'star' => true,      
+                        'placeholder' => 'Enter slug',              
+                        'error' => $errors->first('slug'),
+                        'readonly'=> true
                     ])
                     @endcomponent
 
@@ -60,7 +72,7 @@
                     @component('components.textarea-component', [
                         'wireModel' => 'description',
                         'id' => 'description',
-                        'rows' => 7,
+                        'rows' => 10,
                         'label' => 'Description',
                         'placeholder' => 'Type here...',
                         'star' =>false,

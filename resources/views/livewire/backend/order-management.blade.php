@@ -20,6 +20,8 @@
                         <option value="processing">Processing</option>
                         <option value="shipped">Shipped</option>
                         <option value="delivered">Delivered</option>
+                        <option value="backordered">Backordered</option>
+                        <option value="partially_backordered">Partially Backordered</option>
                         <option value="cancelled">Cancelled</option>
                         <option value="refunded">Refunded</option>
                         <option value="payment_failed">Payment Failed</option>
@@ -48,7 +50,7 @@
                             </div>
                         </div>
                         <div class="flex justify-between items-center">
-                            <div class="flex items-center space-x-4">
+                            <div class="flex items-center space-x-2 flex-wrap gap-y-1">
                                 @if($lastPayment && ($lastPayment->status === 'paid' || $lastPayment->status === 'succeeded'))
                                     <span class="inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-medium bg-green-100 text-green-800">Paid</span>
                                 @elseif($lastPayment && $lastPayment->status === 'failed')
@@ -56,6 +58,23 @@
                                 @else
                                     <span class="inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-medium bg-yellow-100 text-yellow-800">Pending</span>
                                 @endif
+                                
+                                @if($order->status === 'backordered')
+                                    <span class="inline-flex items-center px-2 py-0.5 rounded text-xs font-medium bg-orange-100 text-orange-800">
+                                        <svg class="w-3 h-3 mr-1" fill="currentColor" viewBox="0 0 20 20">
+                                            <path fill-rule="evenodd" d="M18 10a8 8 0 11-16 0 8 8 0 0116 0zm-7 4a1 1 0 11-2 0 1 1 0 012 0zm-1-9a1 1 0 00-1 1v4a1 1 0 102 0V6a1 1 0 00-1-1z" clip-rule="evenodd"/>
+                                        </svg>
+                                        Backordered
+                                    </span>
+                                @elseif($order->status === 'partially_backordered')
+                                    <span class="inline-flex items-center px-2 py-0.5 rounded text-xs font-medium bg-amber-100 text-amber-800">
+                                        <svg class="w-3 h-3 mr-1" fill="currentColor" viewBox="0 0 20 20">
+                                            <path fill-rule="evenodd" d="M18 10a8 8 0 11-16 0 8 8 0 0116 0zm-7 4a1 1 0 11-2 0 1 1 0 012 0zm-1-9a1 1 0 00-1 1v4a1 1 0 102 0V6a1 1 0 00-1-1z" clip-rule="evenodd"/>
+                                        </svg>
+                                        Partial
+                                    </span>
+                                @endif
+                                
                                 <span class="text-sm text-gray-500">
                                     @php
                                         $itemsQty = $order->items->sum('quantity');
@@ -115,7 +134,21 @@
                                     <span class="text-xs text-gray-600">{{ $progress }}%</span>
                                 </div>
                                 <div class="mt-1">
-                                    @if($fulfillmentSummary['is_fully_fulfilled'] ?? false)
+                                    @if($order->status === 'backordered')
+                                        <span class="inline-flex items-center px-2 py-0.5 rounded text-xs font-medium bg-orange-100 text-orange-800">
+                                            <svg class="w-3 h-3 mr-1" fill="currentColor" viewBox="0 0 20 20">
+                                                <path fill-rule="evenodd" d="M18 10a8 8 0 11-16 0 8 8 0 0116 0zm-7 4a1 1 0 11-2 0 1 1 0 012 0zm-1-9a1 1 0 00-1 1v4a1 1 0 102 0V6a1 1 0 00-1-1z" clip-rule="evenodd"/>
+                                            </svg>
+                                            Backordered
+                                        </span>
+                                    @elseif($order->status === 'partially_backordered')
+                                        <span class="inline-flex items-center px-2 py-0.5 rounded text-xs font-medium bg-amber-100 text-amber-800">
+                                            <svg class="w-3 h-3 mr-1" fill="currentColor" viewBox="0 0 20 20">
+                                                <path fill-rule="evenodd" d="M18 10a8 8 0 11-16 0 8 8 0 0116 0zm-7 4a1 1 0 11-2 0 1 1 0 012 0zm-1-9a1 1 0 00-1 1v4a1 1 0 102 0V6a1 1 0 00-1-1z" clip-rule="evenodd"/>
+                                            </svg>
+                                            Partial Backorder
+                                        </span>
+                                    @elseif($fulfillmentSummary['is_fully_fulfilled'] ?? false)
                                         <span class="inline-flex items-center px-2 py-0.5 rounded text-xs font-medium bg-green-100 text-green-800">Complete</span>
                                     @elseif($order->status === 'partially_shipped')
                                         <span class="inline-flex items-center px-2 py-0.5 rounded text-xs font-medium bg-yellow-100 text-yellow-800">Partial</span>

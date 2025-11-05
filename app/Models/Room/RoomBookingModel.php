@@ -11,6 +11,8 @@ use App\Models\Room\RoomTypeModel;
 use App\Models\Room\RoomPriceOptionModel;
 use App\Models\Room\PetSizeLimitModel;
 use App\Models\Size;
+use App\Models\User;
+use App\Models\Pet;
 
 class RoomBookingModel extends Model
 {
@@ -21,6 +23,8 @@ class RoomBookingModel extends Model
         'room_id',
         'room_type_id',
         'customer_id',
+        'order_id',
+        'order_number',
         'room_price',
         'room_price_label',
         'pets_reserved',
@@ -50,6 +54,8 @@ class RoomBookingModel extends Model
         'booking_status' => 'string',
         'payment_method' => 'string',
         'payment_reference' => 'string',
+        'order_id' => 'integer',
+        'order_number' => 'string',
     ];
 
     // Relationships
@@ -68,6 +74,10 @@ class RoomBookingModel extends Model
     public function pet()
     {
         return $this->belongsTo(Pet::class);
+    }
+    public function species()
+    {
+        return $this->belongsTo(Species::class, 'species_id');
     }
 
 

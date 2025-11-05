@@ -53,6 +53,57 @@ class MiniCart extends Component
     {
         $this->cart = $svc->removeCartItem($id);
     }
+    
+    public function removeAddon(int $itemIndex, int $addonIndex, ECommerceService $svc)
+    {
+        $items = array_values($this->cart['items'] ?? []);
+        if (!isset($items[$itemIndex])) return;
+        
+        $item = $items[$itemIndex];
+        if (!isset($item['addons'][$addonIndex])) return;
+        
+        $addon = $item['addons'][$addonIndex];
+        
+        // Don't allow removing required add-ons
+        if (!empty($addon['is_required'])) {
+            return;
+        }
+        
+        $this->cart = $svc->removeAddonFromCart($item['id'], $addon);
+    }
+    
+    public function updated($propertyName, ECommerceService $svc)
+    {
+        // Handle cart.items.X.qty updates for main items
+        if (preg_match('/^cart\.items\.(\d+)\.qty$/', $propertyName, $matches)) {
+            $itemIndex = (int)$matches[1];
+            $items = array_values($this->cart['items'] ?? []);
+            
+            if (isset($items[$itemIndex])) {
+                $item = $items[$itemIndex];
+                $qty = (int)($item['qty'] ?? 1);
+                $qty = max(1, $qty); // Ensure minimum of 1
+                
+                $this->cart = $svc->updateCartItem($item['id'], $qty);
+            }
+        }
+        
+        // Handle cart.items.X.addons.Y.qty updates for add-ons
+        if (preg_match('/^cart\.items\.(\d+)\.addons\.(\d+)\.qty$/', $propertyName, $matches)) {
+            $itemIndex = (int)$matches[1];
+            $addonIndex = (int)$matches[2];
+            $items = array_values($this->cart['items'] ?? []);
+            
+            if (isset($items[$itemIndex]) && isset($items[$itemIndex]['addons'][$addonIndex])) {
+                $item = $items[$itemIndex];
+                $addon = $item['addons'][$addonIndex];
+                $qty = (int)($addon['qty'] ?? 1);
+                $qty = max(1, $qty); // Ensure minimum of 1
+                
+                $this->cart = $svc->updateAddonInCart($item['id'], $addon, $qty);
+            }
+        }
+    }
 
     public function proceed(ECommerceService $svc)
     {

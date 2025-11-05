@@ -14,7 +14,7 @@
         @if(isset($onchangeFn)) onchange="{{$onchangeFn}}" @endif
         @if(isset($wireChangeFn)) wire:change="{{$wireChangeFn}}" @endif autocomplete=""
         class="form-select"
-         @if(isset($disabled)  && $disabled==true) disabled @endif>
+         @if(isset($disabled)  && $disabled==true) disabled @endif @if(isset($multiple) && $multiple==true) multiple @endif>
         @if (isset($optionValue))
             <option value="">{{ $optionValue }}</option>
         @else 

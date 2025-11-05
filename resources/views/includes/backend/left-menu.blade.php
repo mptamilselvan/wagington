@@ -17,7 +17,7 @@
                             <li>
                                 <!-- Current: "bg-white/5 text-white", Default: "text-gray-400 hover:text-white hover:bg-white/5" -->
                                 <a href="#"
-                                    class="group flex gap-x-3 rounded-md p-2 text-sm/6 font-semibold {{request()->routeIs('dashboard') ? 'bg-white/5 text-white' : 'text-gray-400' }} hover:bg-white/5 hover:text-white h-10">
+                                    class="group flex gap-x-3 rounded-md p-2 text-sm/6 font-semibold {{ request()->routeIs('dashboard') ? 'bg-white/5 text-white' : 'text-gray-400' }} hover:bg-white/5 hover:text-white h-10">
                                     <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5"
                                         data-slot="icon" aria-hidden="true" class="size-6 shrink-0">
                                         <path
@@ -29,7 +29,7 @@
                             </li>
                             <li>
                                 <a href="{{ route('customers') }}"
-                                    class="group flex gap-x-3 rounded-md p-2 text-sm/6 font-semibold {{request()->routeIs('customers') ? 'bg-white/5 text-white' : 'text-gray-400' }} hover:bg-white/5 hover:text-white h-10">
+                                    class="group flex gap-x-3 rounded-md p-2 text-sm/6 font-semibold {{ request()->routeIs('customers') ? 'bg-white/5 text-white' : 'text-gray-400' }} hover:bg-white/5 hover:text-white h-10">
                                     @include('components.icons.user.twoUsers')
                                     Customers
                                 </a>
@@ -38,10 +38,20 @@
                             @php
                                 // Determine if the current route is within the settings section
                                 $highlightPetProfileMenu = false;
-                                $settingsMenus = ['pets', 'vaccination-records', 'blood-test-records', 'deworming-records', 'medical-history-records', 'dietary-preferences', 'medication-supplements','temperament-health-evaluations','size-managements'];
-                                if( in_array(request()->segment(2), $settingsMenus )) {                                       
+                                $settingsMenus = [
+                                    'pets',
+                                    'vaccination-records',
+                                    'blood-test-records',
+                                    'deworming-records',
+                                    'medical-history-records',
+                                    'dietary-preferences',
+                                    'medication-supplements',
+                                    'temperament-health-evaluations',
+                                    'size-managements',
+                                ];
+                                if (in_array(request()->segment(2), $settingsMenus)) {
                                     $highlightPetProfileMenu = true;
-                                } 
+                                }
                             @endphp
                             <li>
                                 <a href="{{ route('admin.pets') }}"
@@ -51,72 +61,82 @@
                                 </a>
                             </li>
                             <li>
-                                <a href="#"
-                                    class="group flex gap-x-3 rounded-md p-2 text-sm/6 font-semibold text-gray-400 hover:bg-white/5 hover:text-white h-10">
+                                <a href="{{ route('admin.services') }}"
+                                    class="group flex gap-x-3 rounded-md p-2 text-sm/6 font-semibold {{ request()->routeIs('admin.services') ? 'bg-white/5 text-white' : 'text-gray-400' }} hover:bg-white/5 hover:text-white h-10">
                                     @include('components.icons.sidebar.addons')
-                                    Services Add-ons
+                                    Services
                                 </a>
                             </li>
                             @php
                                 // Determine if the current route is within the Campaign section
                                 $showCampaignSubmenu = 'hidden';
-                                $highlightCampaignMenu= false;
+                                $highlightCampaignMenu = false;
                                 $highlightReferralMenu = false;
                                 $highlightmarketingcampaign = false;
                                 $highlightVoucher = false;
-                                  if(request()->segment(3) == 'referralpromotion' ){                                       
-                                        $showCampaignSubmenu = '';
-                                        $highlightCampaignMenu = $highlightReferralMenu = true;
-                                  } elseif(request()->segment(3) == 'marketingcampaign' ){                                       
-                                        $showCampaignSubmenu = '';
-                                        $highlightCampaignMenu = true;
-                                        $highlightmarketingcampaign = true;
-                                  } elseif(request()->segment(3) == 'voucher' ){                                       
-                                        $showCampaignSubmenu = '';
-                                        $highlightCampaignMenu = true;
-                                        $highlightVoucher = true;
-                                  }
-                                @endphp
-                                <li>
-                                    <div class="flex flex-row hover:bg-white/5 hover:text-white h-10 {{ $highlightCampaignMenu ? 'bg-white/5 text-white' : 'text-gray-400' }}">
-                                        <span class="group flex gap-x-3 rounded-md p-2 text-sm/6 font-semibold"> 
-                                            @include('components.icons.sidebar.marketing-campaign')
-                                        </span>
-                                        <button type="button" command="--toggle" commandfor="sub-menu-campaign"
-                                            class="flex w-full items-center gap-x-3 rounded-md p-2 text-left text-sm/6 font-semibold">
-                                            Campaign
-                                        </button>
-                                    </div>
-                                    <el-disclosure id="sub-menu-campaign" {{$showCampaignSubmenu}} class="[&:not([hidden])]:contents">
-                                        <ul class="mt-1 px-2">
-                                            <li>
-                                                <!-- 44px -->
-                                                <a href="{{ route('admin.referralpromotion') }}"
-                                                    class="block rounded-md py-2 pl-9 pr-2 text-sm/6 hover:bg-white/5 hover:text-white h-10 font-semibold {{ $highlightReferralMenu ? 'bg-white/5 text-white' : 'text-gray-400' }}">Referral Promotions</a>
-                                            </li>
-                                            <li>
-                                                <!-- 44px -->
-                                                <a href="{{ route('admin.marketingcampaign') }} "
-                                                    class="block rounded-md py-2 pl-9 pr-2 text-sm/6 text-gray-400 hover:bg-white/5 hover:text-white h-10 font-semibold {{ $highlightmarketingcampaign ? 'bg-white/5 text-white' : 'text-gray-400' }}">Marketing Campaigns</a>
-                                            </li>
+                                if (request()->segment(3) == 'referralpromotion') {
+                                    $showCampaignSubmenu = '';
+                                    $highlightCampaignMenu = $highlightReferralMenu = true;
+                                } elseif (request()->segment(3) == 'marketingcampaign') {
+                                    $showCampaignSubmenu = '';
+                                    $highlightCampaignMenu = true;
+                                    $highlightmarketingcampaign = true;
+                                } elseif (request()->segment(3) == 'voucher') {
+                                    $showCampaignSubmenu = '';
+                                    $highlightCampaignMenu = true;
+                                    $highlightVoucher = true;
+                                }
+                            @endphp
+                            <li>
+                                <div
+                                    class="flex flex-row hover:bg-white/5 hover:text-white h-10 {{ $highlightCampaignMenu ? 'bg-white/5 text-white' : 'text-gray-400' }}">
+                                    <span class="group flex gap-x-3 rounded-md p-2 text-sm/6 font-semibold">
+                                        @include('components.icons.sidebar.marketing-campaign')
+                                    </span>
+                                    <button type="button" command="--toggle" commandfor="sub-menu-campaign"
+                                        class="flex w-full items-center gap-x-3 rounded-md p-2 text-left text-sm/6 font-semibold">
+                                        Campaign
+                                    </button>
+                                </div>
+                                <el-disclosure id="sub-menu-campaign" {{ $showCampaignSubmenu }}
+                                    class="[&:not([hidden])]:contents">
+                                    <ul class="mt-1 px-2">
+                                        <li>
+                                            <!-- 44px -->
+                                            <a href="{{ route('admin.referralpromotion') }}"
+                                                class="block rounded-md py-2 pl-9 pr-2 text-sm/6 hover:bg-white/5 hover:text-white h-10 font-semibold {{ $highlightReferralMenu ? 'bg-white/5 text-white' : 'text-gray-400' }}">Referral
+                                                Promotions</a>
+                                        </li>
+                                        <li>
+                                            <!-- 44px -->
+                                            <a href="{{ route('admin.marketingcampaign') }} "
+                                                class="block rounded-md py-2 pl-9 pr-2 text-sm/6 text-gray-400 hover:bg-white/5 hover:text-white h-10 font-semibold {{ $highlightmarketingcampaign ? 'bg-white/5 text-white' : 'text-gray-400' }}">Marketing
+                                                Campaigns</a>
+                                        </li>
 
-                                            <li>
-                                                <!-- 44px -->
-                                                <a href="{{ route('admin.voucher') }} "
-                                                    class="block rounded-md py-2 pl-9 pr-2 text-sm/6 text-gray-400 hover:bg-white/5 hover:text-white h-10 font-semibold {{ $highlightVoucher ? 'bg-white/5 text-white' : 'text-gray-400' }}">Voucher</a>
-                                            </li>
-                                        </ul> 
-                                    </el-disclosure>
-                                </li> 
+                                        <li>
+                                            <!-- 44px -->
+                                            <a href="{{ route('admin.voucher') }} "
+                                                class="block rounded-md py-2 pl-9 pr-2 text-sm/6 text-gray-400 hover:bg-white/5 hover:text-white h-10 font-semibold {{ $highlightVoucher ? 'bg-white/5 text-white' : 'text-gray-400' }}">Voucher</a>
+                                        </li>
+                                    </ul>
+                                </el-disclosure>
+                            </li>
 
-                                @php
+                            @php
                                 // E-commerce submenu logic
                                 $showEcommerceSubmenu = 'hidden';
                                 $highlightEcommerceMenu = false;
                                 $highlightProductMenu = false;
                                 $highlightOrderMenu = false;
                                 $highlightShippingMenu = false;
-                                $ecommerceMenus = ['product-management', 'order-management', 'shipping-management'];
+                                $highlightInventoryMenu = false;
+                                $ecommerceMenus = [
+                                    'product-management',
+                                    'order-management',
+                                    'shipping-management',
+                                    'inventory-restock',
+                                ];
                                 if (in_array(request()->segment(2), $ecommerceMenus)) {
                                     $showEcommerceSubmenu = '';
                                     $highlightEcommerceMenu = true;
@@ -126,47 +146,58 @@
                                         $highlightOrderMenu = true;
                                     } elseif (request()->segment(2) == 'shipping-management') {
                                         $highlightShippingMenu = true;
+                                    } elseif (request()->segment(2) == 'inventory-restock') {
+                                        $highlightInventoryMenu = true;
                                     }
                                 }
-                                @endphp
-                                <li>
-                                    <div class="flex flex-row hover:bg-white/5 hover:text-white h-10 {{ $highlightEcommerceMenu ? 'bg-white/5 text-white' : 'text-gray-400' }}">
-                                        <span class="group flex gap-x-3 rounded-md p-2 text-sm/6 font-semibold"> 
-                                            @include('components.icons.sidebar.setting')
-                                        </span>
-                                        <button type="button" command="--toggle" commandfor="sub-menu-ecommerce"
-                                            class="flex w-full items-center gap-x-3 rounded-md p-2 text-left text-sm/6 font-semibold">
-                                            E-commerce   
-                                        </button>
-                                    </div>
-                                    <el-disclosure id="sub-menu-ecommerce" {{ $showEcommerceSubmenu }} class="[&:not([hidden])]:contents">
-                                        <ul class="mt-1 px-2">
-                                            <li>
-                                                <!-- 44px -->
-                                                <a href="{{ route('product-management') }}"
-                                                    class="block rounded-md py-2 pl-9 pr-2 text-sm/6 hover:bg-white/5 hover:text-white h-10 font-semibold {{ $highlightProductMenu ? 'bg-white/5 text-white' : 'text-gray-400' }}">
-                                                    Product Management
-                                                </a>
-                                            </li>
-                                            <li>
-                                                <!-- 44px -->
-                                                <a href="{{ route('order-management') }}"
-                                                    class="block rounded-md py-2 pl-9 pr-2 text-sm/6 hover:bg-white/5 hover:text-white h-10 font-semibold {{ $highlightOrderMenu ? 'bg-white/5 text-white' : 'text-gray-400' }}">
-                                                    Order Management
-                                                </a>
-                                            </li>
-                                            <li>
-                                                <!-- 44px -->
-                                                <a href="{{ route('shipping-management') }}"
-                                                    class="block rounded-md py-2 pl-9 pr-2 text-sm/6 hover:bg-white/5 hover:text-white h-10 font-semibold {{ $highlightShippingMenu ? 'bg-white/5 text-white' : 'text-gray-400' }}">
-                                                    Shipping Management
-                                                </a>
-                                            </li>
-                                        </ul>
-                                    </el-disclosure>
-                                </li>
+                            @endphp
+                            <li>
+                                <div
+                                    class="flex flex-row hover:bg-white/5 hover:text-white h-10 {{ $highlightEcommerceMenu ? 'bg-white/5 text-white' : 'text-gray-400' }}">
+                                    <span class="group flex gap-x-3 rounded-md p-2 text-sm/6 font-semibold">
+                                        @include('components.icons.sidebar.setting')
+                                    </span>
+                                    <button type="button" command="--toggle" commandfor="sub-menu-ecommerce"
+                                        class="flex w-full items-center gap-x-3 rounded-md p-2 text-left text-sm/6 font-semibold">
+                                        E-commerce
+                                    </button>
+                                </div>
+                                <el-disclosure id="sub-menu-ecommerce" {{ $showEcommerceSubmenu }}
+                                    class="[&:not([hidden])]:contents">
+                                    <ul class="mt-1 px-2">
+                                        <li>
+                                            <!-- 44px -->
+                                            <a href="{{ route('product-management') }}"
+                                                class="block rounded-md py-2 pl-9 pr-2 text-sm/6 hover:bg-white/5 hover:text-white h-10 font-semibold {{ $highlightProductMenu ? 'bg-white/5 text-white' : 'text-gray-400' }}">
+                                                Product Management
+                                            </a>
+                                        </li>
+                                        <li>
+                                            <!-- 44px -->
+                                            <a href="{{ route('order-management') }}"
+                                                class="block rounded-md py-2 pl-9 pr-2 text-sm/6 hover:bg-white/5 hover:text-white h-10 font-semibold {{ $highlightOrderMenu ? 'bg-white/5 text-white' : 'text-gray-400' }}">
+                                                Order Management
+                                            </a>
+                                        </li>
+                                        <li>
+                                            <!-- 44px -->
+                                            <a href="{{ route('shipping-management') }}"
+                                                class="block rounded-md py-2 pl-9 pr-2 text-sm/6 hover:bg-white/5 hover:text-white h-10 font-semibold {{ $highlightShippingMenu ? 'bg-white/5 text-white' : 'text-gray-400' }}">
+                                                Shipping Management
+                                            </a>
+                                        </li>
+                                        <li>
+                                            <!-- 44px -->
+                                            <a href="{{ route('inventory-restock') }}"
+                                                class="block rounded-md py-2 pl-9 pr-2 text-sm/6 hover:bg-white/5 hover:text-white h-10 font-semibold {{ $highlightInventoryMenu ? 'bg-white/5 text-white' : 'text-gray-400' }}">
+                                                Inventory Management
+                                            </a>
+                                        </li>
+                                    </ul>
+                                </el-disclosure>
+                            </li>
 
-                                @php
+                            @php
                                 // Room Management submenu logic
                                 $showRoomSubmenu = 'hidden';
                                 $highlightRoomManagementMenu = false;
@@ -174,7 +205,7 @@
                                 $highlightRoomTypeMenu = false;
                                 $highlightRoomSettingsMenu = false;
                                 $highlightCancelSettingMenu = false;
-                                $roomMenus = ['rooms','room-types'];
+                                $roomMenus = ['rooms', 'room-types'];
                                 if (in_array(request()->segment(2), $roomMenus)) {
                                     $showRoomSubmenu = '';
                                     //$highlightRoomMenu = true;
@@ -183,124 +214,148 @@
                                         $highlightRoomMenu = true;
                                     } elseif (request()->segment(2) == 'room-types') {
                                         $highlightRoomTypeMenu = true;
-                                    } 
+                                    }
                                 }
-                                @endphp
-                                <li>
-                                    <div class="flex flex-row hover:bg-white/5 hover:text-white h-10 {{ $highlightRoomManagementMenu ? 'bg-white/5 text-white' : 'text-gray-400' }}">
-                                        <span class="group flex gap-x-3 rounded-md p-2 text-sm/6 font-semibold"> 
-                                            @include('components.icons.sidebar.rooms')
-                                        </span>
-                                        <button type="button" command="--toggle" commandfor="sub-menu-room"
-                                            class="flex w-full items-center gap-x-3 rounded-md p-2 text-left text-sm/6 font-semibold">
-                                            Rooms Management
-                                        </button>
-                                    </div>
-                                    <el-disclosure id="sub-menu-room" {{ $showRoomSubmenu }} class="[&:not([hidden])]:contents">
-                                        <ul class="mt-1 px-4">
-                                            <!--<li>
-                                                <a href=""
-                                                    class="block rounded-md py-2 pl-9 pr-2 text-sm/6 hover:bg-white/5 hover:text-white h-10 font-semibold {{ $highlightProductMenu ? 'bg-white/5 text-white' : 'text-gray-400' }}">
-                                                    Booking Management
-                                                </a>
-                                            </li>-->
-                                            <li>
-                                                <!-- 44px -->
-                                                <a href="{{ route('room-types') }}"
-                                                    class="block rounded-md py-2 pl-9 pr-2 text-sm/6 hover:bg-white/5 hover:text-white h-10 font-semibold {{ $highlightRoomTypeMenu ? 'bg-white/5 text-white' : 'text-gray-400' }}">
-                                                    Room Types
-                                                </a>
-                                            </li>
-                                            <li>
-                                                <!-- 44px -->
-                                                <a href="{{ route('rooms') }}"
-                                                    class="block rounded-md py-2 pl-9 pr-2 text-sm/6 hover:bg-white/5 hover:text-white h-10 font-semibold {{ $highlightRoomMenu ? 'bg-white/5 text-white' : 'text-gray-400' }}">
-                                                    Rooms
-                                                </a>
-                                            </li>
-                                            
-                                        </ul>
-                                    </el-disclosure>
-                                </li>
+                            @endphp
+                            <li>
+                                <div
+                                    class="flex flex-row hover:bg-white/5 hover:text-white h-10 {{ $highlightRoomManagementMenu ? 'bg-white/5 text-white' : 'text-gray-400' }}">
+                                    <span class="group flex gap-x-3 rounded-md p-2 text-sm/6 font-semibold">
+                                        @include('components.icons.sidebar.rooms')
+                                    </span>
+                                    <button type="button" command="--toggle" commandfor="sub-menu-room"
+                                        class="flex w-full items-center gap-x-3 rounded-md p-2 text-left text-sm/6 font-semibold">
+                                        Rooms Management
+                                    </button>
+                                </div>
+                                <el-disclosure id="sub-menu-room" {{ $showRoomSubmenu }}
+                                    class="[&:not([hidden])]:contents">
+                                    <ul class="mt-1 px-4">
 
-                                @php
+                                        <li>
+                                            <a href="{{ route('room-bookings') }}"
+                                                class="block rounded-md py-2 pl-9 pr-2 text-sm/6 hover:bg-white/5 hover:text-white h-10 font-semibold {{ $highlightProductMenu ? 'bg-white/5 text-white' : 'text-gray-400' }}">
+                                                Booking Management
+                                            </a>
+                                        </li>
+                                        <li>
+                                            <!-- 44px -->
+                                            <a href="{{ route('room-types') }}"
+                                                class="block rounded-md py-2 pl-9 pr-2 text-sm/6 hover:bg-white/5 hover:text-white h-10 font-semibold {{ $highlightRoomTypeMenu ? 'bg-white/5 text-white' : 'text-gray-400' }}">
+                                                Room Types
+                                            </a>
+                                        </li>
+                                        <li>
+                                            <!-- 44px -->
+                                            <a href="{{ route('rooms') }}"
+                                                class="block rounded-md py-2 pl-9 pr-2 text-sm/6 hover:bg-white/5 hover:text-white h-10 font-semibold {{ $highlightRoomMenu ? 'bg-white/5 text-white' : 'text-gray-400' }}">
+                                                Rooms
+                                            </a>
+                                        </li>
+
+                                    </ul>
+                                </el-disclosure>
+                            </li>
+
+                            @php
                                 // Determine if the current route is within the settings section
                                 $showSubmenu = 'hidden';
-                                $highlightMenu= false;
+                                $highlightMenu = false;
                                 $highlightPetMenu = false;
                                 $highlightGeneralMenu = false;
                                 $highlightEcommerceMenu = false;
                                 $highlightServiceSettingMenu = false;
                                 $highlightRoomSettingsMenu = false;
-                                $settingsMenus = ['species', 'breeds', 'vaccination', 'blood-tests', 'sizes', 'pet-tags', 'vaccine-exemptions','revaluation-workflow'];
-                                $generalsettingsMenus = ['system-settings','company-settings','operational-hours','tax-settings'];
+                                $settingsMenus = [
+                                    'species',
+                                    'breeds',
+                                    'vaccination',
+                                    'blood-tests',
+                                    'sizes',
+                                    'pet-tags',
+                                    'vaccine-exemptions',
+                                    'revaluation-workflow',
+                                ];
+                                $generalsettingsMenus = [
+                                    'system-settings',
+                                    'company-settings',
+                                    'operational-hours',
+                                    'tax-settings',
+                                ];
                                 $servicesettingsMenus = ['service-settings'];
-                                $roomsettingsMenus = ['species-size-settings','pet-size-limit-settings','room-peak-seasons','room-off-days','room-cancel-setting','room-weekend','room-price-options'];
+                                $roomsettingsMenus = [
+                                    'species-size-settings',
+                                    'pet-size-limit-settings',
+                                    'room-peak-seasons',
+                                    'room-off-days',
+                                    'room-cancel-setting',
+                                    'room-weekend',
+                                    'room-price-options',
+                                ];
                                 $ecommercesettingsMenus = ['ecommerce-settings'];
-                                  if( in_array(request()->segment(2), $settingsMenus )) {                                       
-                                        $showSubmenu = '';
-                                        $highlightMenu = $highlightPetMenu = true;
-                                  } elseif(in_array(request()->segment(2), $generalsettingsMenus )) {                                       
-                                        $showSubmenu = '';
-                                        $highlightMenu = true;
-                                        $highlightGeneralMenu = true;
-                                  } elseif(in_array(request()->segment(2), $ecommercesettingsMenus )) {                                       
-                                        $showSubmenu = '';
-                                        $highlightMenu = true;
-                                        $highlightEcommerceMenu = true;
-                                  }
-                                  elseif(in_array(request()->segment(2), $servicesettingsMenus )) {                                       
-                                        $showSubmenu = '';
-                                        $highlightMenu = true;
-                                        $highlightServiceSettingMenu = true;
-                                  }
-                                  elseif(in_array(request()->segment(2), $roomsettingsMenus )) {                                       
-                                        $showSubmenu = '';
-                                        $highlightMenu = true;
-                                        $highlightRoomSettingsMenu = true;
-                                  }
-                                @endphp
+                                if (in_array(request()->segment(2), $settingsMenus)) {
+                                    $showSubmenu = '';
+                                    $highlightMenu = $highlightPetMenu = true;
+                                } elseif (in_array(request()->segment(2), $generalsettingsMenus)) {
+                                    $showSubmenu = '';
+                                    $highlightMenu = true;
+                                    $highlightGeneralMenu = true;
+                                } elseif (in_array(request()->segment(2), $ecommercesettingsMenus)) {
+                                    $showSubmenu = '';
+                                    $highlightMenu = true;
+                                    $highlightEcommerceMenu = true;
+                                } elseif (in_array(request()->segment(2), $servicesettingsMenus)) {
+                                    $showSubmenu = '';
+                                    $highlightMenu = true;
+                                    $highlightServiceSettingMenu = true;
+                                } elseif (in_array(request()->segment(2), $roomsettingsMenus)) {
+                                    $showSubmenu = '';
+                                    $highlightMenu = true;
+                                    $highlightRoomSettingsMenu = true;
+                                }
+                            @endphp
                             <li>
-                                <div class="flex flex-row hover:bg-white/5 hover:text-white h-10 {{ $highlightMenu ? 'bg-white/5 text-white' : 'text-gray-400' }}">
-                                    <span class="group flex gap-x-3 rounded-md p-2 text-sm/6 font-semibold"> 
+                                <div
+                                    class="flex flex-row hover:bg-white/5 hover:text-white h-10 {{ $highlightMenu ? 'bg-white/5 text-white' : 'text-gray-400' }}">
+                                    <span class="group flex gap-x-3 rounded-md p-2 text-sm/6 font-semibold">
                                         @include('components.icons.sidebar.setting')
                                     </span>
                                     <button type="button" command="--toggle" commandfor="sub-menu-settings"
                                         class="flex w-full items-center gap-x-3 rounded-md p-2 text-left text-sm/6 font-semibold">
-                                        Settings   
+                                        Settings
                                     </button>
                                 </div>
-                                <el-disclosure id="sub-menu-settings" {{$showSubmenu}} class="[&:not([hidden])]:contents">
+                                <el-disclosure id="sub-menu-settings" {{ $showSubmenu }}
+                                    class="[&:not([hidden])]:contents">
                                     <ul class="mt-1 px-2">
                                         <li>
                                             <!-- 44px -->
                                             <a href="{{ route('admin.species') }}"
-                                                class="block rounded-md py-2 pl-9 pr-2 text-sm/6 hover:bg-white/5 hover:text-white h-10 font-semibold {{ $highlightPetMenu ? 'bg-white/5 text-white' : 'text-gray-400' }}">Pet Settings</a>
+                                                class="block rounded-md py-2 pl-9 pr-2 text-sm/6 hover:bg-white/5 hover:text-white h-10 font-semibold {{ $highlightPetMenu ? 'bg-white/5 text-white' : 'text-gray-400' }}">Pet
+                                                Settings</a>
                                         </li>
                                         <li>
                                             <!-- 44px -->
                                             <a href="{{ route('system-settings') }} "
-                                                class="block rounded-md py-2 pl-9 pr-2 text-sm/6 text-gray-400 hover:bg-white/5 hover:text-white h-10 font-semibold {{ $highlightGeneralMenu ? 'bg-white/5 text-white' : 'text-gray-400' }}">General Settings</a>
+                                                class="block rounded-md py-2 pl-9 pr-2 text-sm/6 text-gray-400 hover:bg-white/5 hover:text-white h-10 font-semibold {{ $highlightGeneralMenu ? 'bg-white/5 text-white' : 'text-gray-400' }}">General
+                                                Settings</a>
                                         </li>
                                         <li>
                                             <!-- 44px -->
                                             <a href="{{ route('admin.service-category') }} "
-                                                class="block rounded-md py-2 pl-9 pr-2 text-sm/6 text-gray-400 hover:bg-white/5 hover:text-white h-10 font-semibold {{ $highlightServiceSettingMenu ? 'bg-white/5 text-white' : 'text-gray-400' }}">Service Settings</a>
-                                        </li>
-                                         <li>
-                                                <a href="{{ route('pet-size-limit-settings') }}"
-                                                    class="block rounded-md py-2 pl-9 pr-2 text-sm/6 hover:bg-white/5 hover:text-white h-10 font-semibold {{ $highlightRoomSettingsMenu ? 'bg-white/5 text-white' : 'text-gray-400' }}">
-                                                    Room Settings
-                                                </a>
+                                                class="block rounded-md py-2 pl-9 pr-2 text-sm/6 text-gray-400 hover:bg-white/5 hover:text-white h-10 font-semibold {{ $highlightServiceSettingMenu ? 'bg-white/5 text-white' : 'text-gray-400' }}">Service
+                                                Settings</a>
                                         </li>
                                         <li>
-                                            <!-- 44px -->
-                                            <a href="#"
-                                                class="block rounded-md py-2 pl-9 pr-2 text-sm/6 text-gray-400 hover:bg-white/5 hover:text-white h-10 font-semibold">Service Category Settings</a>
+                                            <a href="{{ route('pet-size-limit-settings') }}"
+                                                class="block rounded-md py-2 pl-9 pr-2 text-sm/6 hover:bg-white/5 hover:text-white h-10 font-semibold {{ $highlightRoomSettingsMenu ? 'bg-white/5 text-white' : 'text-gray-400' }}">
+                                                Room Settings
+                                            </a>
                                         </li>
                                         <li>
-                                        <a href="{{ route('ecommerce-settings') }}"
-                                                class="block rounded-md py-2 pl-9 pr-2 text-sm/6 text-gray-400 hover:bg-white/5 hover:text-white h-10 font-semibold {{ $highlightEcommerceMenu ? 'bg-white/5 text-white' : 'text-gray-400' }}">E-commerce Settings</a>
+                                            <a href="{{ route('ecommerce-settings') }}"
+                                                class="block rounded-md py-2 pl-9 pr-2 text-sm/6 text-gray-400 hover:bg-white/5 hover:text-white h-10 font-semibold {{ $highlightEcommerceMenu ? 'bg-white/5 text-white' : 'text-gray-400' }}">E-commerce
+                                                Settings</a>
                                         </li>
                                     </ul>
                                 </el-disclosure>
@@ -347,7 +402,8 @@
                         @endif
                         <div class="flex-1 text-white group-hover:text-primary-navy">
                             <div class="text-sm font-semibold">{{ Auth::user()->name }}</div>
-                            <div class="text-xs text-gray-300 group-hover:text-gray-600">{{ Auth::user()->email }}</div>
+                            <div class="text-xs text-gray-300 group-hover:text-gray-600">{{ Auth::user()->email }}
+                            </div>
                         </div>
                     </button>
 

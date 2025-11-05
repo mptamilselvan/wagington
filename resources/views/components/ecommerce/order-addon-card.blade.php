@@ -45,8 +45,10 @@
                         'processing' => ['bg-yellow-100 text-yellow-800', 'Processing'],
                         'shipped' => ['bg-blue-100 text-blue-800', 'Shipped'],
                         'delivered' => ['bg-green-100 text-green-800', 'Delivered'],
-                        'awaiting_handover' => ['bg-purple-100 text-purple-800', 'Digital'],
-                        default => ['bg-gray-100 text-gray-800', ucfirst($fulfillmentStatus)]
+                        'awaiting_handover' => ['bg-purple-100 text-purple-800', 'Awaiting Handover'],
+                        'awaiting_stock' => ['bg-red-100 text-red-800', 'Awaiting Stock'],
+                        'handed_over' => ['bg-green-100 text-green-800', 'Handed Over'],
+                        default => ['bg-gray-100 text-gray-800', ucfirst(str_replace('_', ' ', $fulfillmentStatus))]
                     };
                 @endphp
                 <span class="inline-flex items-center px-1.5 py-0.5 rounded-full text-xs font-medium {{ $statusConfig[0] }}">

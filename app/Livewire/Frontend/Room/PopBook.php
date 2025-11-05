@@ -5,6 +5,7 @@ namespace App\Livewire\Frontend\Room;
 use App\Models\Room\RoomModel;
 use App\Models\Pet;
 use App\Models\Product;
+use App\Models\Service;
 use Livewire\Component;
 use Illuminate\Support\Facades\Auth;
 use Illuminate\Support\Facades\Session;
@@ -12,10 +13,16 @@ use App\Services\ImageService;
 use App\Models\Room\RoomTypeModel;
 use App\Services\Frontend\Room\RoomService;
 use App\Models\Room\RoomPriceOptionModel;
+use App\Models\Room\PeakSeasonModel;
+use App\Models\Room\OffDayModel;
 use Carbon\Carbon;
 // removed duplicate Pet import
 use App\Models\Size;
 use App\Models\CartItem;
+use App\Enums\CatalogEnum;
+use App\Enums\OrderPaymentStatusEnum;
+use App\Enums\RoomBookingStatusEnum;
+
 class PopBook extends Component
 {
     public $room = null;
@@ -45,7 +52,7 @@ class PopBook extends Component
     public $agreementContent = null;
     public $aggreed_terms = [];
     public $agreeDocs = []; // checkbox states per agreement term index
-
+    public $test_date = null;
     // Date selection
     public $start_date = null; // Y-m-d
     public $end_date = null;   // Y-m-d
@@ -201,10 +208,16 @@ class PopBook extends Component
     
     public function loadAddons()
     {
-        $this->addons = Product::where('product_type', 'addon')
-            ->where('status', 'published')
-            ->orderBy('name')
-            ->get(['id','name'])
+        $this->addons = Service::where('service_addon', true)
+            ->orderBy('title')
+            ->get(['id','title','total_price'])
+            ->map(function($service) {
+                return [
+                    'id' => $service->id,
+                    'name' => $service->title,
+                    'total_price' => $service->total_price,
+                ];
+            })
             ->toArray();
     }
 
@@ -218,7 +231,7 @@ class PopBook extends Component
             $this->selectedAddons[$addon['id']] = [
                 'id' => $addon['id'],
                 'name' => $addon['name'],
-                'price' => 0,
+                'price' => $addon['total_price'] ?? 0,
                 'qty' => 1,
             ];
         }
@@ -252,6 +265,27 @@ class PopBook extends Component
             $sum += (float)$ad['price'] * (int)$ad['qty'];
         }
         return $sum;
+    }
+
+    public function getAreAllAgreementsCheckedProperty()
+    {
+        // If no agreements exist, consider them all checked
+        if (empty($this->aggreed_terms) || !is_array($this->aggreed_terms)) {
+            return true;
+        }
+        
+        // Check if all agreement checkboxes are checked
+        foreach ($this->aggreed_terms as $idx => $term) {
+            if (!isset($this->agreeDocs[$idx])) {
+                return false;
+            }
+            // Ensure it's a truthy value (boolean true, string "1", etc.)
+            if (!$this->agreeDocs[$idx]) {
+                return false;
+            }
+        }
+        
+        return true;
     }
 
     public function getCanCheckAvailabilityProperty()
@@ -468,49 +502,52 @@ class PopBook extends Component
         $variationTotal = 0.0;
         $petLines = [];
         if (!empty($selectedSizeIds)) {
-            $prices = RoomPriceOptionModel::where('room_type_id', (int)$this->room_type_id)
-                ->whereIn('pet_size_id', $selectedSizeIds)
-                ->where('no_of_days', $days)
-                ->get(['pet_size_id','price']);
-            // Fallback set for 1-day price if exact days not configured
-            $prices1d = collect();
-            if ($days !== 1) {
-                $prices1d = RoomPriceOptionModel::where('room_type_id', (int)$this->room_type_id)
-                    ->whereIn('pet_size_id', $selectedSizeIds)
-                    ->where('no_of_days', 1)
-                    ->get(['pet_size_id','price']);
-            }
             $sizeMap = Size::whereIn('id', $selectedSizeIds)->get(['id','name'])->keyBy('id');
             $ppv = (float)($resp['price_variation'] ?? ($resp['peak_price_variation'] ?? 0));
             foreach ($selectedPets as $pet) {
                 $sid = (int)$pet->pet_size_id;
                 $sizeName = optional($sizeMap->get($sid))->name;
-                $row = $prices->firstWhere('pet_size_id', $sid);
-                $base = (float)($row->price ?? 0);
-                if ($base <= 0 && $days > 1 && $prices1d->isNotEmpty()) {
-                    $row1 = $prices1d->firstWhere('pet_size_id', $sid);
-                    $base = (float)($row1->price ?? 0) * $days;
+                
+                // Find the price option with maximum no_of_days that is <= user's selected days
+                // First try exact match
+                $priceOption = RoomPriceOptionModel::where('room_type_id', (int)$this->room_type_id)
+                    ->where('pet_size_id', $sid)
+                    ->where('no_of_days', $days)
+                    ->first(['price', 'no_of_days']);
+                
+                // If no exact match, find the maximum no_of_days <= selected days
+                if (!$priceOption || (float)$priceOption->price <= 0) {
+                    $priceOption = RoomPriceOptionModel::where('room_type_id', (int)$this->room_type_id)
+                        ->where('pet_size_id', $sid)
+                        ->where('no_of_days', '<=', $days)
+                        ->orderByDesc('no_of_days')
+                        ->first(['price', 'no_of_days']);
                 }
-                // Additional fallbacks if still zero: use any price for room_type
-                if ($base <= 0) {
-                    $rowDays = RoomPriceOptionModel::where('room_type_id', (int)$this->room_type_id)
-                        ->where('no_of_days', $days)
-                        ->orderByDesc('price')
-                        ->first(['price']);
-                    if ($rowDays && (float)$rowDays->price > 0) {
-                        $base = (float)$rowDays->price;
-                    }
-                }
-                if ($base <= 0) {
-                    $rowAny = RoomPriceOptionModel::where('room_type_id', (int)$this->room_type_id)
+                
+                // If still no match, try without pet_size_id filter (fallback)
+                if (!$priceOption || (float)$priceOption->price <= 0) {
+                    $priceOption = RoomPriceOptionModel::where('room_type_id', (int)$this->room_type_id)
+                        ->where('no_of_days', '<=', $days)
                         ->orderByDesc('no_of_days')
                         ->orderByDesc('price')
-                        ->first(['price','no_of_days']);
-                    if ($rowAny && (float)$rowAny->price > 0) {
-                        // Scale proportionally by days if we have a 1-day price; otherwise use as-is
-                        $base = (int)($rowAny->no_of_days ?? 1) === 1 ? ((float)$rowAny->price * $days) : (float)$rowAny->price;
-                    }
+                        ->first(['price', 'no_of_days']);
                 }
+                
+                // If still no match, get any price option (final fallback)
+                if (!$priceOption || (float)$priceOption->price <= 0) {
+                    $priceOption = RoomPriceOptionModel::where('room_type_id', (int)$this->room_type_id)
+                        ->orderByDesc('no_of_days')
+                        ->orderByDesc('price')
+                        ->first(['price', 'no_of_days']);
+                }
+                
+                $base = (float)($priceOption->price ?? 0);
+                
+                // Multiply the base price by user's selected number of days
+                if ($base > 0) {
+                    $base = $base * $days;
+                }
+                
                 $final = $base;
                 if ($ppv > 0 && $base > 0) {
                     $final = $base + (($base * $ppv) / 100.0);
@@ -598,7 +635,7 @@ class PopBook extends Component
         }
 
         $quantity = count($this->selectedPets);
-        $catalogId = 2;
+        $catalogId = 3;
 
         \Log::info('Adding room to cart', [
             'user_id' => $user->id,
@@ -609,51 +646,22 @@ class PopBook extends Component
 
         try {
             // Check if there is already a room booking cart item for this user (product_id NULL for rooms)
-            $existingCartItem = CartItem::where('user_id', $user->id)
-                ->whereNull('product_id')
-                ->where('catalog_id', $catalogId)
-                ->whereNull('variant_id')
-                ->first();
+            // Create new cart item
+            $cartItem = CartItem::create([
+                'user_id' => $user->id,
+                'catalog_id' => CatalogEnum::ROOM_BOOKING->value,
+                'product_id' => $roomId, 
+                'variant_id' => null,
+                'quantity' => $quantity,
+                'availability_status' => 'in_stock',
+                'expires_at' => now()->addMinutes((int) config('sku.cart_reserve_minutes', 60)),
+            ]);
 
-            $cartItem = null;
-            if ($existingCartItem) {
-                // Update existing cart item quantity and expiration
-                $existingCartItem->quantity = $quantity;
-                $existingCartItem->expires_at = now()->addMinutes((int) config('sku.cart_reserve_minutes', 60));
-                $existingCartItem->save();
-                $cartItem = $existingCartItem;
-            } else {
-                // Check if there's any other room booking (null variant_id) that needs to be replaced
-                // Note: Due to unique constraint on (user_id, variant_key), only one item can exist with null variant_id per user
-                $otherRoomItem = CartItem::where('user_id', $user->id)
-                    ->whereNull('product_id')
-                    ->whereNull('variant_id')
-                    ->where('catalog_id', $catalogId)
-                    ->first();
-
-                if ($otherRoomItem) {
-                    // Update existing room booking to new room
-                    $otherRoomItem->quantity = $quantity;
-                    $otherRoomItem->expires_at = now()->addMinutes((int) config('sku.cart_reserve_minutes', 60));
-                    $otherRoomItem->save();
-                    $cartItem = $otherRoomItem;
-                } else {
-                    // Create new cart item
-                    $cartItem = CartItem::create([
-                        'user_id' => $user->id,
-                        'catalog_id' => $catalogId,
-                        'product_id' => null, // keep product_id NULL for room bookings to satisfy FK
-                        'variant_id' => null,
-                        'quantity' => $quantity,
-                        'availability_status' => 'in_stock',
-                        'expires_at' => now()->addMinutes((int) config('sku.cart_reserve_minutes', 60)),
-                    ]);
-                }
-            }
+           
 
             \Log::info('Room successfully added to cart', [
                 'user_id' => $user->id,
-                'cart_item_id' => $existingCartItem->id ?? ($otherRoomItem->id ?? 'new'),
+                'cart_item_id' => $cartItem->id,
             ]);
 
             // Persist cart room details
@@ -701,9 +709,12 @@ class PopBook extends Component
                     $petsReserved = array_map(fn($pid)=>[ 'pet_id' => (int)$pid ], $this->selectedPets ?? []);
                 }
 
+                // Get room name first
+                $roomModel = \App\Models\Room\RoomModel::find($roomId);
+                $roomName = optional($roomModel->roomType)->name ?? 'Room';
+
                 // Save or update details record for this cart item
                 if ($cartItem) {
-                    $roomModel = \App\Models\Room\RoomModel::find($roomId);
                     \App\Models\CartRoomDetail::updateOrCreate(
                         [ 'cart_item_id' => $cartItem->id ],
                         [
@@ -723,6 +734,10 @@ class PopBook extends Component
                         ]
                     );
                 }
+
+                // Do not manipulate session cart directly here; the cart page will
+                // rebuild the session snapshot from DB via ECommerceService->getCart()
+
             } catch (\Throwable $e) {
                 \Log::error('Error saving cart_room_details', [ 'error' => $e->getMessage() ]);
             }
@@ -746,6 +761,33 @@ class PopBook extends Component
 
     public function render()
     {
-        return view('livewire.frontend.room.pop-book');
+        // Fetch peak season dates for calendar highlighting
+        $peakSeasonDates = PeakSeasonModel::select('start_date', 'end_date')
+            ->get()
+            ->map(function ($peakSeason) {
+                return [
+                    'start_date' => $peakSeason->start_date->format('Y-m-d'),
+                    'end_date' => $peakSeason->end_date->format('Y-m-d'),
+                ];
+            })
+            ->toArray();
+
+        // Fetch off days dates for calendar highlighting
+        $offDaysDates = OffDayModel::select('start_date', 'end_date')
+            ->whereNotNull('start_date')
+            ->whereNotNull('end_date')
+            ->get()
+            ->map(function ($offDay) {
+                return [
+                    'start_date' => $offDay->start_date->format('Y-m-d'),
+                    'end_date' => $offDay->end_date->format('Y-m-d'),
+                ];
+            })
+            ->toArray();
+
+        return view('livewire.frontend.room.pop-book', [
+            'peakSeasonDates' => $peakSeasonDates,
+            'offDaysDates' => $offDaysDates,
+        ]);
     }
 }

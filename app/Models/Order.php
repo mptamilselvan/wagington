@@ -114,21 +114,58 @@ class Order extends Model
         return round(($fulfilledItems / $totalItems) * 100, 2);
     }
 
+    /**
+     * Check if the order is fully fulfilled (all items and addons are delivered or handed over)
+     * 
+     * Note: For best performance, eager load relationships before calling:
+     * $order->load(['items', 'items.addons']) or Order::with(['items', 'items.addons'])->find($id)
+     * 
+     * @return bool True if all items and addons are fulfilled, false otherwise
+     */
     public function isFullyFulfilled()
     {
-        // Count items that are not fully fulfilled
-        $pendingItemsCount = $this->items()
+        // If no items exist at all, order is not fulfilled
+        if ($this->relationLoaded('items')) {
+            $items = $this->items;
+            if ($items->isEmpty()) {
+                return false;
+            }
+
+            // Check items from loaded relation
+            $pendingItemsCount = $items->whereNotIn('fulfillment_status', ['delivered', 'handed_over'])->count();
+            
+            // Check addons from loaded relations if available
+            if ($items->first()?->relationLoaded('addons')) {
+                $pendingAddonsCount = $items->flatMap(function ($item) {
+                    return $item->addons;
+                })->whereNotIn('fulfillment_status', ['delivered', 'handed_over'])->count();
+            } else {
+                // Fall back to query for addons if not loaded
+                $pendingAddonsCount = OrderAddon::whereHas('orderItem', function($query) {
+                    $query->where('order_id', $this->id);
+                })
+                ->whereNotIn('fulfillment_status', ['delivered', 'handed_over'])
+                ->count();
+            }
+        } else {
+            // Fall back to queries if relations aren't loaded
+            $itemsExist = $this->items()->exists();
+            if (!$itemsExist) {
+                return false;
+            }
+
+            $pendingItemsCount = $this->items()
+                ->whereNotIn('fulfillment_status', ['delivered', 'handed_over'])
+                ->count();
+
+            $pendingAddonsCount = OrderAddon::whereHas('orderItem', function($query) {
+                $query->where('order_id', $this->id);
+            })
             ->whereNotIn('fulfillment_status', ['delivered', 'handed_over'])
             ->count();
+        }
 
-        // Count addons that are not fully fulfilled
-        $pendingAddonsCount = OrderAddon::whereHas('orderItem', function($query) {
-            $query->where('order_id', $this->id);
-        })
-        ->whereNotIn('fulfillment_status', ['delivered', 'handed_over'])
-        ->count();
-
-        // Return true only if there are no pending items or addons
+        // Return true only if there are items and no pending items or addons
         return $pendingItemsCount === 0 && $pendingAddonsCount === 0;
     }
 
@@ -182,6 +219,7 @@ class Order extends Model
                                   ($fulfilledItemsCount + $fulfilledAddonsCount === $totalCount),
             'items' => [
                 'total' => $totalItems,
+                'awaiting_stock' => $getCount($itemStatusCounts, 'awaiting_stock'),
                 'pending' => $getCount($itemStatusCounts, 'pending'),
                 'processing' => $getCount($itemStatusCounts, 'processing'),
                 'shipped' => $getCount($itemStatusCounts, 'shipped'),
@@ -191,6 +229,7 @@ class Order extends Model
             ],
             'addons' => [
                 'total' => $totalAddons,
+                'awaiting_stock' => $getCount($addonStatusCounts, 'awaiting_stock'),
                 'pending' => $getCount($addonStatusCounts, 'pending'),
                 'processing' => $getCount($addonStatusCounts, 'processing'),
                 'shipped' => $getCount($addonStatusCounts, 'shipped'),

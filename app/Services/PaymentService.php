@@ -426,18 +426,31 @@ class PaymentService
 
             $pi = \Stripe\PaymentIntent::create($params, $opts);
 
-            // Stripe automatically generates invoices for successful payments
-            // We can retrieve the invoice information from the payment intent if needed
-            if ($pi->status === 'succeeded' && !empty($pi->charges->data)) {
+            // For one-off PaymentIntents, invoices are NOT automatically generated
+            // Invoices are only created for subscriptions or when explicitly using the Invoice API
+            // Check if there's an associated invoice and gather its information
+            if ($pi->status === 'succeeded' && 
+                isset($pi->charges) && 
+                is_object($pi->charges) && 
+                !empty($pi->charges->data)
+            ) {
                 $charge = $pi->charges->data[0];
                 if (isset($charge->invoice)) {
                     try {
                         // Retrieve the invoice if it exists
                         $invoice = \Stripe\Invoice::retrieve($charge->invoice);
-                        $pi->invoice_id = $invoice->id;
-                        $pi->invoice_url = $invoice->hosted_invoice_url ?? null;
-                        $pi->invoice_pdf_url = $invoice->invoice_pdf ?? null;
-                        $pi->invoice_number = $invoice->number ?? null;
+                        // Store invoice info in response data instead of mutating the PaymentIntent
+                        $invoiceInfo = [
+                            'id' => $invoice->id,
+                            'hosted_url' => $invoice->hosted_invoice_url ?? null,
+                            'pdf_url' => $invoice->invoice_pdf ?? null,
+                            'number' => $invoice->number ?? null
+                        ];
+                        // Add invoice info to the success response data
+                        return $this->successResponse('Payment successful', [
+                            'payment_intent' => $pi,
+                            'invoice' => $invoiceInfo
+                        ]);
                     } catch (\Exception $e) {
                         $this->logError('Failed to retrieve invoice', $user, $e);
                         // Continue without invoice information if retrieval fails

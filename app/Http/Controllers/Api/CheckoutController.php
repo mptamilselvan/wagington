@@ -211,6 +211,25 @@ class CheckoutController extends Controller
             $user->id
         );
 
+        // Format applied vouchers with detailed discount information
+        $formattedVouchers = array_map(function ($voucher) {
+            return [
+                'voucher_code' => $voucher['voucher_code'],
+                'discount_type' => $voucher['discount_type'],
+                'discount_value' => $voucher['discount_value'],
+                'calculated_discount' => $voucher['calculated_discount'] ?? 0,
+                'running_total_after' => $voucher['running_total_after'] ?? 0,
+                'stack_order' => $voucher['stack_order'] ?? 0,
+                'stack_priority' => $voucher['stack_priority'] ?? 0,
+                'applied_amount' => $voucher['applied_amount'] ?? $voucher['calculated_discount'] ?? 0,
+                'stackable' => $voucher['stackable'] ?? false
+            ];
+        }, $evaluation['applied_vouchers'] ?? []);
+
+        // Calculate total discount impact
+        $totalDiscount = (float)($evaluation['summary']['discount_total'] ?? 0.0);
+        
+        // Format the response consistently with the web interface
         return response()->json([
             'status' => 'success',
             'message' => 'Checkout summary retrieved successfully.',
@@ -224,8 +243,16 @@ class CheckoutController extends Controller
             'requires_shipping' => $shippingRequired,
             'shipping_amount' => $evaluation['shipping_amount'],
             'tax' => $evaluation['tax'],
-            'applied_vouchers' => $evaluation['applied_vouchers'],
-            'summary' => $evaluation['summary'],
+            'applied_vouchers' => $formattedVouchers,
+            'summary' => array_merge($evaluation['summary'], [
+                'formatted_subtotal' => 'S$' . number_format($subtotal, 2),
+                'formatted_discount' => 'S$' . number_format($totalDiscount, 2),
+                'formatted_total' => 'S$' . number_format($evaluation['summary']['total'], 2),
+                'has_discounts' => $totalDiscount > 0,
+                'discount_percentage' => $subtotal > 0 ? round(($totalDiscount / $subtotal) * 100, 1) : 0
+            ]),
+            'errors' => $evaluation['errors'] ?? [],
+            'stackability_message' => $evaluation['stackability_message'] ?? null,
         ]);
     }
 
@@ -258,19 +285,37 @@ class CheckoutController extends Controller
      *         description="Existing coupon codes that are already applied on the client",
      *         @OA\Items(type="string"),
      *         example={"PROMO-10", "SAVE5"}
+     *       ),
+     *       @OA\Property(
+     *         property="force_apply",
+     *         type="boolean",
+     *         example=false,
+     *         description="Bypass stackability conflict checks and apply coupon directly. Used after user confirmation."
      *       )
      *     )
      *   ),
      *   @OA\Response(
      *     response=200,
-     *     description="Coupons evaluated",
+     *     description="Coupons evaluated or conflict detected",
      *     @OA\JsonContent(
-     *       @OA\Property(property="status", type="string", example="success"),
-     *       @OA\Property(property="message", type="string", example="Coupon PROMO-10 applied"),
-     *       @OA\Property(property="coupon_codes", type="array", @OA\Items(type="string")),
-     *       @OA\Property(property="summary", type="object", description="Updated checkout summary totals"),
-     *       @OA\Property(property="applied_vouchers", type="array", @OA\Items(type="object")),
-     *       @OA\Property(property="stackability_message", type="string", nullable=true)
+     *       oneOf={
+     *         @OA\Schema(
+     *           @OA\Property(property="status", type="string", example="success"),
+     *           @OA\Property(property="message", type="string", example="Coupon PROMO-10 applied"),
+     *           @OA\Property(property="coupon_codes", type="array", @OA\Items(type="string")),
+     *           @OA\Property(property="summary", type="object", description="Updated checkout summary totals"),
+     *           @OA\Property(property="applied_vouchers", type="array", @OA\Items(type="object")),
+     *           @OA\Property(property="stackability_message", type="string", nullable=true)
+     *         ),
+     *         @OA\Schema(
+     *           @OA\Property(property="status", type="string", example="confirmation_required"),
+     *           @OA\Property(property="message", type="string", example="You are trying to apply a non-stackable coupon. This will remove all previously applied stackable coupons. Do you want to continue?"),
+     *           @OA\Property(property="conflict_type", type="string", example="non_stackable_over_stackable"),
+     *           @OA\Property(property="new_coupon", type="string", example="NEW_COUPON"),
+     *           @OA\Property(property="existing_coupons", type="array", @OA\Items(type="string")),
+     *           @OA\Property(property="coupons_to_remove", type="array", @OA\Items(type="string"))
+     *         )
+     *       }
      *     )
      *   ),
      *   @OA\Response(response=400, description="Invalid coupons"),
@@ -283,6 +328,7 @@ class CheckoutController extends Controller
             'coupon_code' => 'nullable|string|max:100',
             'coupon_codes' => 'nullable|array',
             'coupon_codes.*' => 'string|max:100',
+            'force_apply' => 'nullable|boolean',
         ]);
 
         $user = Auth::user();
@@ -297,6 +343,15 @@ class CheckoutController extends Controller
 
         $existingCodes = collect($data['coupon_codes'] ?? [])->filter()->map('trim');
         $newCode = !empty($data['coupon_code']) ? trim($data['coupon_code']) : null;
+        $forceApply = (bool) ($data['force_apply'] ?? false);
+
+        // Check if coupon already applied
+        if (!empty($newCode) && $existingCodes->contains(strtoupper($newCode))) {
+            return response()->json([
+                'status' => 'error',
+                'message' => 'Coupon already applied',
+            ], 422);
+        }
 
         // Check max coupons before adding new code
         if (!empty($newCode)) {
@@ -306,7 +361,53 @@ class CheckoutController extends Controller
                     'message' => sprintf('You can apply up to %d coupons at once.', config('app.max_coupons', 5)),
                 ], 422);
             }
+        }
 
+        $subtotal = $this->checkout->calculateCartSubtotal($cart);
+
+        // Get current summary with existing coupons to calculate current discounts
+        $currentAppliedVouchers = [];
+        $currentTotalDiscount = 0.0;
+        if (!$existingCodes->isEmpty()) {
+            $currentSummary = $this->checkout->evaluateCheckoutSummary(
+                $cart,
+                $existingCodes->all(),
+                $subtotal,
+                0.0,
+                null,
+                $user->id
+            );
+            $currentAppliedVouchers = $currentSummary['applied_vouchers'] ?? [];
+            $currentTotalDiscount = $currentSummary['summary']['discount_total'] ?? 0.0;
+        }
+
+        // Check for stackability conflicts BEFORE applying (unless force_apply is true)
+        if (!$forceApply && !empty($newCode)) {
+            $conflictCheck = $this->checkStackabilityConflict(
+                $existingCodes->all(), 
+                $newCode, 
+                $user->id, 
+                $subtotal,
+                $currentAppliedVouchers,
+                $currentTotalDiscount
+            );
+            
+            if ($conflictCheck['has_conflict']) {
+                return response()->json([
+                    'status' => 'confirmation_required',
+                    'message' => $conflictCheck['message'],
+                    'conflict_type' => $conflictCheck['conflict_type'],
+                    'new_coupon' => $newCode,
+                    'existing_coupons' => $conflictCheck['existing_coupons'],
+                    'coupons_to_remove' => $conflictCheck['coupons_to_remove'],
+                    'old_coupons_discount' => $conflictCheck['old_coupons_discount'] ?? [],
+                    'new_coupon_discount' => $conflictCheck['new_coupon_discount'] ?? 0.0,
+                ], 200);
+            }
+        }
+
+        // Build final codes array: existing codes + new code (if provided)
+        if (!empty($newCode)) {
             $existingCodes->push($newCode);
         }
 
@@ -323,8 +424,6 @@ class CheckoutController extends Controller
                 'message' => 'No coupon codes supplied',
             ], 422);
         }
-
-        $subtotal = $this->checkout->calculateCartSubtotal($cart);
 
         $evaluation = $this->checkout->evaluateCheckoutSummary(
             $cart,
@@ -372,6 +471,167 @@ class CheckoutController extends Controller
             'tax' => $evaluation['tax'] ?? [],
             'stackability_message' => $evaluation['stackability_message'] ?? null,
         ]);
+    }
+
+    /**
+     * Check for stackability conflicts between new and existing coupons.
+     * Provides enhanced cost comparison data for better user decision-making.
+     */
+    private function checkStackabilityConflict(
+        array $existingCodes, 
+        string $newCode, 
+        int $userId, 
+        float $subtotal,
+        array $currentAppliedVouchers = [],
+        float $currentTotalDiscount = 0.0
+    ): array
+    {
+        if (empty($existingCodes)) {
+            return ['has_conflict' => false];
+        }
+
+        $voucherService = app(\App\Services\VoucherService::class);
+        
+        // Validate the new coupon
+        try {
+            $newVoucher = $voucherService->validateVoucher(['voucher_code' => strtoupper($newCode)], $userId);
+            $newVoucherData = $newVoucher['data'];
+        } catch (\Exception $e) {
+            return ['has_conflict' => false]; // Invalid coupon, will fail in main validation
+        }
+
+        // Validate existing coupons
+        $existingVouchers = [];
+        foreach ($existingCodes as $code) {
+            try {
+                $result = $voucherService->validateVoucher(['voucher_code' => strtoupper($code)], $userId);
+                $existingVouchers[] = $result['data'];
+            } catch (\Exception $e) {
+                // Skip invalid existing coupons
+            }
+        }
+
+        if (empty($existingVouchers)) {
+            return ['has_conflict' => false];
+        }
+
+        $newIsStackable = (bool) ($newVoucherData['stackable'] ?? false);
+        $existingStackable = array_filter($existingVouchers, fn($v) => $v['stackable']);
+        $existingNonStackable = array_filter($existingVouchers, fn($v) => !$v['stackable']);
+        
+        // Helper function to calculate discount for a voucher
+        $calculateDiscount = function($voucher, $amount) {
+            if ($voucher['discount_type'] === 'percentage') {
+                return round(($amount * $voucher['discount_value']) / 100, 2);
+            } else {
+                return round(min($voucher['discount_value'], $amount), 2);
+            }
+        };
+        
+        // Calculate new coupon discount (on current subtotal after removing conflicting discounts)
+        $newCouponDiscount = $calculateDiscount($newVoucherData, max(0, $subtotal));
+        $currentTotal = $subtotal - $currentTotalDiscount;
+        
+        // Helper to get detailed discount info for coupons being removed
+        $getOldCouponsDiscount = function($couponsToRemove) use ($currentAppliedVouchers) {
+            $discountInfo = [];
+            $totalOldDiscount = 0.0;
+            foreach ($currentAppliedVouchers as $voucher) {
+                if (in_array($voucher['voucher_code'], $couponsToRemove)) {
+                    $discountInfo[] = [
+                        'code' => $voucher['voucher_code'],
+                        'type' => $voucher['discount_type'],
+                        'value' => $voucher['discount_value'],
+                        'discount' => $voucher['calculated_discount'] ?? 0
+                    ];
+                    $totalOldDiscount += (float)($voucher['calculated_discount'] ?? 0);
+                }
+            }
+            return [
+                'details' => $discountInfo,
+                'total' => $totalOldDiscount
+            ];
+        };
+
+        // Helper to format currency consistently
+        $formatCurrency = fn($amount) => 'S$' . number_format($amount, 2);
+        
+        // Helper to build conflict response with cost comparison
+        $buildConflictResponse = function($couponsToRemove, $message) use (
+            $subtotal, 
+            $getOldCouponsDiscount, 
+            $newCouponDiscount, 
+            $currentTotal,
+            $formatCurrency,
+            $existingVouchers,
+            $newCode
+        ) {
+            $oldCouponsDiscount = $getOldCouponsDiscount($couponsToRemove);
+            $newTotal = $subtotal - $newCouponDiscount;
+            
+            // Calculate net impact on total
+            $netImpact = ($currentTotal) - $newTotal;
+            $impactText = $netImpact > 0 
+                ? "You'll save an additional " . $formatCurrency($netImpact)
+                : "You'll pay " . $formatCurrency(abs($netImpact)) . " more";
+                
+            $detailedMessage = $message . "\n\n" .
+                "Current total: " . $formatCurrency($currentTotal) . "\n" .
+                "New total with " . strtoupper($newCode) . ": " . $formatCurrency($newTotal) . "\n" .
+                $impactText;
+
+            return [
+                'has_conflict' => true,
+                'existing_coupons' => array_map(fn($v) => $v['voucher_code'], $existingVouchers),
+                'coupons_to_remove' => $couponsToRemove,
+                'message' => $detailedMessage,
+                'old_coupons_discount' => $oldCouponsDiscount['details'],
+                'new_coupon_discount' => $newCouponDiscount,
+                'current_total' => $currentTotal,
+                'new_total' => $newTotal,
+                'net_impact' => $netImpact,
+                'subtotal' => $subtotal,
+                'old_total_discount' => $oldCouponsDiscount['total']
+            ];
+        };
+
+        // Scenario 1: Applying non-stackable when stackable coupons exist
+        if (!$newIsStackable && !empty($existingStackable)) {
+            $couponsToRemove = array_map(fn($v) => $v['voucher_code'], $existingStackable);
+            return array_merge(
+                $buildConflictResponse(
+                    $couponsToRemove,
+                    'You are trying to apply a non-stackable coupon. This will remove all previously applied stackable coupons.'
+                ),
+                ['conflict_type' => 'non_stackable_over_stackable']
+            );
+        }
+
+        // Scenario 2: Applying stackable when non-stackable coupon exists
+        if ($newIsStackable && !empty($existingNonStackable)) {
+            $couponsToRemove = array_map(fn($v) => $v['voucher_code'], $existingNonStackable);
+            return array_merge(
+                $buildConflictResponse(
+                    $couponsToRemove,
+                    'A non-stackable coupon is already applied. Stackable coupons cannot be combined with it. Adding this coupon will remove all currently applied non-stackable coupons.'
+                ),
+                ['conflict_type' => 'stackable_over_non_stackable']
+            );
+        }
+
+        // Scenario 3: Applying non-stackable when non-stackable coupon exists
+        if (!$newIsStackable && !empty($existingNonStackable)) {
+            $couponsToRemove = array_map(fn($v) => $v['voucher_code'], $existingNonStackable);
+            return array_merge(
+                $buildConflictResponse(
+                    $couponsToRemove,
+                    'A non-stackable coupon is already applied. Applying this new coupon will replace the existing non-stackable coupon.'
+                ),
+                ['conflict_type' => 'non_stackable_over_non_stackable']
+            );
+        }
+
+        return ['has_conflict' => false];
     }
 
     /**

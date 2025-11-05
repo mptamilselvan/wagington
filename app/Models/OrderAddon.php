@@ -28,26 +28,36 @@ class OrderAddon extends Model
     }
 
     // Helper methods for fulfillment
-    public function isShippable()
-    {
-        return $this->fulfillment_status !== 'awaiting_handover';
-    }
+        public function isShippable(): bool
+        {
+            if (empty($this->fulfillment_status)) {
+                return false;
+            }
+            return $this->fulfillment_status !== 'awaiting_handover';
+        }
 
-    public function isFulfilled()
+    public function isFulfilled(): bool
     {
         return in_array($this->fulfillment_status, ['delivered', 'handed_over']);
     }
 
-    public function getFulfillmentProgress()
+    public function getFulfillmentProgress(): float
     {
         if ($this->fulfillment_status === 'handed_over') {
-            return 100; // Digital items are fully fulfilled when handed over
+            return 100.00; // items are fully fulfilled when handed over
         }
         
-        if ($this->quantity == 0) {
-            return 0;
+        if ($this->quantity === 0) {
+            return 0.00;
         }
         
-        return round(($this->fulfilled_quantity / $this->quantity) * 100, 2);
+        // Ensure fulfilled_quantity is not negative
+        $fulfilled = max(0, $this->fulfilled_quantity);
+        
+        // Calculate percentage with 2 decimal precision
+        $progress = round(($fulfilled / $this->quantity) * 100, 2);
+        
+        // Clamp between 0.00 and 100.00
+        return max(0.00, min(100.00, $progress));
     }
 }

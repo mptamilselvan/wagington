@@ -212,24 +212,32 @@
                                 if ($sel) {
                                     // Get the max quantity per order setting (if set)
                                     $maxQtyPerOrder = (int)($sel['max_quantity_per_order'] ?? 0);
+                                    $available = (int)($sel['available'] ?? 0);
+                                    $allowBackorders = (bool)($sel['allow_backorders'] ?? false);
                                     
                                     // If max_quantity_per_order is set and greater than 0, use it as the primary limit
                                     if ($maxQtyPerOrder > 0) {
-                                        // If backorders are allowed, we can go up to max_quantity_per_order
-                                        if ($sel['allow_backorders']) {
+                                        if ($allowBackorders) {
+                                            // With backorders allowed, can go up to max_quantity_per_order
                                             $maxQty = $maxQtyPerOrder;
                                         } else {
-                                            // If backorders are not allowed, we're limited by the lesser of:
-                                            // 1. max_quantity_per_order
-                                            // 2. available stock
-                                            $available = (int)($sel['available'] ?? 0);
+                                            // Without backorders, limited by available stock
+                                            // and max_quantity_per_order
                                             $maxQty = min($maxQtyPerOrder, $available);
-                                            // Ensure we have at least 1 if we have any available stock
-                                            $maxQty = max(1, $maxQty);
                                         }
                                     } else {
-                                        // No max_quantity_per_order set, use original logic
-                                        $maxQty = max(1, (int)($sel['allow_backorders'] ? 10 : ($sel['available'] ?? 0)));
+                                        // No max_quantity_per_order set
+                                        if ($allowBackorders) {
+                                            $maxQty = 10; // Default limit for backorders
+                                        } else {
+                                            $maxQty = $available; // May be 0 if out of stock
+                                        }
+                                    }
+
+                                    // Only ensure minimum of 1 if there is actual stock available
+                                    // and backorders are not allowed
+                                    if (!$allowBackorders && $available > 0) {
+                                        $maxQty = max(1, $maxQty);
                                     }
                                 }
                             @endphp
@@ -310,7 +318,7 @@
             <div x-data="{ open:false, errorMessage: '' }" 
                  x-on:cart-updated.window="open=true; setTimeout(()=>open=false, 1800)"
                  x-on:cart-error.window="errorMessage = $event.detail.message; open=true; setTimeout(()=>open=false, 5000)"
-                 x-on:qty-changed.window="errorMessage = ''; @this.errorMessage = ''">
+                 x-on:qty-changed.window="errorMessage = ''">
                 <div x-show="open" class="fixed bottom-6 right-6 bg-green-600 text-white px-4 py-2 rounded shadow" x-cloak>Added to cart</div>
                 <div x-show="errorMessage" class="fixed bottom-6 right-6 bg-red-600 text-white px-4 py-2 rounded shadow" x-cloak>
                     <span x-text="errorMessage"></span>

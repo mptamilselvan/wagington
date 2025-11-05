@@ -25,6 +25,10 @@ use Illuminate\Support\Facades\Session;
 use Illuminate\Pagination\LengthAwarePaginator;
 use Illuminate\Support\Str;
 use Illuminate\Database\Eloquent\Builder;
+use App\Enums\CatalogEnum;
+use App\Enums\OrderPaymentStatusEnum;
+use App\Enums\RoomBookingStatusEnum;
+use App\Models\CartRoomDetail;
 
 class ECommerceService
 {
@@ -428,8 +432,22 @@ class ECommerceService
             }
         }
 
-        $p->getCollection()->transform(function($order) use ($productImages){
-            return $this->presentOrderSummary($order, $productImages);
+        // Batch-load room bookings for the orders on this page
+        $orderIds = collect($p->items())->map(fn($o) => (int)$o->id)->filter()->values();
+        $orderIdToBookings = [];
+        if ($orderIds->isNotEmpty()) {
+            $bookings = \App\Models\Room\RoomBookingModel::with(['roomType','room'])
+                ->whereIn('order_id', $orderIds)
+                ->get()
+                ->groupBy('order_id');
+            foreach ($bookings as $oid => $collection) {
+                $orderIdToBookings[(int)$oid] = $collection;
+            }
+        }
+
+        $p->getCollection()->transform(function($order) use ($productImages, $orderIdToBookings){
+            $bookings = $orderIdToBookings[$order->id] ?? collect();
+            return $this->presentOrderSummary($order, $productImages, $bookings);
         });
         return $p;
     }
@@ -437,12 +455,13 @@ class ECommerceService
     /**
      * Present a single order summary for listing.
      */
-    public function presentOrderSummary(\App\Models\Order $order, array $productImages = []): array
+    public function presentOrderSummary(\App\Models\Order $order, array $productImages = [], $roomBookings = null): array
     {
         // Total item count = sum of main items + addons quantities
         $mainQty = (int) ($order->items->sum('quantity'));
         $addonQty = (int) ($order->items->flatMap(fn($it) => $it->addons ? $it->addons : collect())->sum('quantity'));
-        $totalItems = $mainQty + $addonQty;
+        $bookingCount = $roomBookings ? $roomBookings->count() : 0;
+        $totalItems = $mainQty + $addonQty + $bookingCount;
         
         // Build a small preview of items (up to 3) with optional image URLs
         $preview = $order->items->take(3)->map(function($it) use ($productImages){
@@ -452,7 +471,28 @@ class ECommerceService
                 'qty' => (int)$it->quantity,
                 'image_url' => isset($productImages[$it->product_id]) ? $productImages[$it->product_id] : null,
             ];
-        })->values()->all();
+        })->values();
+
+        // Add room booking previews (room type name and primary image)
+        if ($roomBookings && $roomBookings->isNotEmpty()) {
+            foreach ($roomBookings->take(max(0, 3 - $preview->count())) as $rb) {
+                $img = null;
+                if ($rb->roomType) {
+                    $img = $rb->roomType->getPrimaryImageUrl();
+                    if (!$img && is_array($rb->roomType->images) && count($rb->roomType->images) > 0) {
+                        $first = $rb->roomType->images[0];
+                        $img = is_array($first) ? ($first['url'] ?? null) : (is_string($first) ? $first : null);
+                    }
+                }
+                $preview->push([
+                    'name' => $rb->roomType?->name ?? ($rb->room?->name ?? 'Room Booking'),
+                    'variant' => 'Booking',
+                    'qty' => 1,
+                    'image_url' => $img,
+                ]);
+            }
+        }
+        $preview = $preview->values()->all();
         
         return [
             'order_number' => $order->order_number,
@@ -475,9 +515,9 @@ class ECommerceService
             ->where('order_number', $orderNumber)
             ->with([
                 'items' => function($q){
-                    $q->select('id','order_id','product_id','product_name','variant_display_name','product_attributes','quantity','unit_price','total_price','variant_id');
+                    $q->select('id','order_id','product_id','product_name','variant_display_name','product_attributes','quantity','unit_price','total_price','variant_id','fulfillment_status');
                 },
-                'items.addons:id,order_item_id,addon_name,quantity,unit_price,total_price,addon_product_id',
+                'items.addons:id,order_item_id,addon_name,quantity,unit_price,total_price,addon_product_id,fulfillment_status',
                 'shippingAddress','billingAddress','payments','appliedVouchers'
             ])->firstOrFail();
 
@@ -510,7 +550,13 @@ class ECommerceService
 
         $mainQty = (int) $order->items->sum('quantity');
         $addonQty = (int) $order->items->flatMap(fn($it) => $it->addons)->sum('quantity');
-        $totalItems = $mainQty + $addonQty;
+
+        // Load room bookings for this order
+        $roomBookings = \App\Models\Room\RoomBookingModel::with(['roomType','room','species'])
+            ->where('order_id', $order->id)
+            ->orderBy('id')
+            ->get();
+        $totalItems = $mainQty + $addonQty + $roomBookings->count();
 
         $items = $order->items->map(function($it) use ($productImages, $addonImages){
             return [
@@ -520,6 +566,7 @@ class ECommerceService
                 'qty' => (int) $it->quantity,
                 'unit_price' => (float) $it->unit_price,
                 'total_price' => (float) $it->total_price,
+                'fulfillment_status' => $it->fulfillment_status ?? 'pending',
                 'image_url' => $productImages[$it->product_id] ?? null,
                 'addons' => $it->addons->map(function($ad) use ($addonImages){
                     return [
@@ -527,7 +574,48 @@ class ECommerceService
                         'qty' => (int)$ad->quantity,
                         'unit_price' => (float)$ad->unit_price,
                         'total_price' => (float)$ad->total_price,
+                        'fulfillment_status' => $ad->fulfillment_status ?? 'pending',
                         'image_url' => isset($ad->addon_product_id) ? ($addonImages[$ad->addon_product_id] ?? null) : null,
+                    ];
+                })->values()->all(),
+            ];
+        })->values()->all();
+
+        // Map room bookings for detail view
+        $bookingItems = $roomBookings->map(function($rb){
+            // Resolve room type image
+            $img = null;
+            if ($rb->roomType) {
+                $img = $rb->roomType->getPrimaryImageUrl();
+                if (!$img && is_array($rb->roomType->images) && count($rb->roomType->images) > 0) {
+                    $first = $rb->roomType->images[0];
+                    $img = is_array($first) ? ($first['url'] ?? null) : (is_string($first) ? $first : null);
+                }
+            }
+            return [
+                'catalog_id' => 3,
+                'is_room_booking' => true,
+                'name' => $rb->roomType?->name ?? ($rb->room?->name ?? 'Room Booking'),
+                'variant' => $rb->species?->name ? ('Species: ' . $rb->species->name) : null,
+                'attributes' => [
+                    'Check-in' => (string)$rb->check_in_date,
+                    'Check-out' => (string)$rb->check_out_date,
+                    'No. of days' => (int)($rb->no_of_days ?? 0),
+                    'Pets' => is_array($rb->pets_reserved) ? count($rb->pets_reserved) : (int)($rb->pet_quantity ?? 0),
+                ],
+                'qty' => 1,
+                'unit_price' => (float)($rb->room_price ?? 0),
+                'total_price' => (float)($rb->total_price ?? 0),
+                'fulfillment_status' => 'pending',
+                'image_url' => $img,
+                'addons' => collect($rb->service_addons ?? [])->map(function($ad){
+                    return [
+                        'name' => $ad['title'] ?? 'Addon',
+                        'qty' => 1,
+                        'unit_price' => (float)($ad['price'] ?? 0),
+                        'total_price' => (float)($ad['price'] ?? 0),
+                        'fulfillment_status' => 'pending',
+                        'image_url' => null,
                     ];
                 })->values()->all(),
             ];
@@ -562,8 +650,8 @@ class ECommerceService
                 'last_name' => $order->user->last_name ?? '',
                 'address_line_1' => $order->billingAddress->address_line1 ?? '',
                 'address_line_2' => $order->billingAddress->address_line2 ?? '',
-                'city' => '',
-                'state' => '',
+                'city' => $order->billingAddress->city ?? '',
+                'state' => $order->billingAddress->state ?? '',
                 'postal_code' => $order->billingAddress->postal_code ?? '',
                 'country' => $order->billingAddress->country ?? '',
                 'phone' => $order->user->phone ?? '',
@@ -607,7 +695,7 @@ class ECommerceService
                 'billing' => $cleanBillingAddress,
                 'shipping' => $cleanShippingAddress,
             ],
-            'items' => $items,
+            'items' => array_merge($items, $bookingItems),
             'applied_vouchers' => $appliedVouchers, // Add this line to include applied vouchers
             'payment' => [
                 'display_text' => $paymentText,
@@ -642,9 +730,9 @@ class ECommerceService
             ->where('user_id', $user->id)
             ->with([
                 'items' => function($q){
-                    $q->select('id','order_id','product_id','product_name','variant_display_name','product_attributes','quantity','unit_price','total_price','variant_id');
+                    $q->select('id','order_id','product_id','product_name','variant_display_name','product_attributes','quantity','unit_price','total_price','variant_id','fulfillment_status');
                 },
-                'items.addons:id,order_item_id,addon_name,quantity,unit_price,total_price,addon_product_id',
+                'items.addons:id,order_item_id,addon_name,quantity,unit_price,total_price,addon_product_id,fulfillment_status',
                 'shippingAddress','billingAddress','payments','appliedVouchers'
             ])->firstOrFail();
 
@@ -687,6 +775,7 @@ class ECommerceService
                 'qty' => (int) $it->quantity,
                 'unit_price' => (float) $it->unit_price,
                 'total_price' => (float) $it->total_price,
+                'fulfillment_status' => $it->fulfillment_status ?? 'pending',
                 'image_url' => $productImages[$it->product_id] ?? null,
                 'addons' => $it->addons->map(function($ad) use ($addonImages){
                     return [
@@ -694,6 +783,7 @@ class ECommerceService
                         'qty' => (int)$ad->quantity,
                         'unit_price' => (float)$ad->unit_price,
                         'total_price' => (float)$ad->total_price,
+                        'fulfillment_status' => $ad->fulfillment_status ?? 'pending',
                         'image_url' => isset($ad->addon_product_id) ? ($addonImages[$ad->addon_product_id] ?? null) : null,
                     ];
                 })->values()->all(),
@@ -729,8 +819,8 @@ class ECommerceService
                 'last_name' => $order->user->last_name ?? '',
                 'address_line_1' => $order->billingAddress->address_line1 ?? '',
                 'address_line_2' => $order->billingAddress->address_line2 ?? '',
-                'city' => '',
-                'state' => '',
+                'city' => $order->billingAddress->city ?? '',
+                'state' => $order->billingAddress->state ?? '',
                 'postal_code' => $order->billingAddress->postal_code ?? '',
                 'country' => $order->billingAddress->country ?? '',
                 'phone' => $order->user->phone ?? '',
@@ -746,8 +836,8 @@ class ECommerceService
                 'last_name' => $order->user->last_name ?? '',
                 'address_line_1' => $order->shippingAddress->address_line1 ?? '',
                 'address_line_2' => $order->shippingAddress->address_line2 ?? '',
-                'city' => '',
-                'state' => '',
+                'city' => $order->shippingAddress->city ?? '',
+                'state' => $order->shippingAddress->state ?? '',
                 'postal_code' => $order->shippingAddress->postal_code ?? '',
                 'country' => $order->shippingAddress->country ?? '',
                 'phone' => $order->user->phone ?? '',
@@ -1019,6 +1109,7 @@ class ECommerceService
 
         // Defensive recompute: refresh availability snapshot; do NOT inflate reservation with global availability
         foreach ($items as &$it) {
+            if($it['catalog_id'] != CatalogEnum::PRODUCT->value) continue;
             try {
                 $variantId = (int)($it['variant_id'] ?? 0);
                 if ($variantId <= 0) continue;
@@ -1141,6 +1232,7 @@ class ECommerceService
                         'quantity' => $qty,
                         'expires_at' => $expiresAt,
                         'availability_status' => $availabilityStatus,
+                        'catalog_id' => CatalogEnum::PRODUCT->value,
                     ]);
                 }
 
@@ -1272,6 +1364,7 @@ class ECommerceService
                     'quantity' => $qty,
                     'expires_at' => $expiresAt,
                     'availability_status' => $availabilityStatus,
+                    'catalog_id' => CatalogEnum::PRODUCT->value,
                 ]);
             }
 
@@ -1380,6 +1473,8 @@ class ECommerceService
 
             $item = [
                 'id' => $itemId,
+                'cart_item_id' => $cartItem->id,
+                'catalog_id' => CatalogEnum::PRODUCT->value,
                 'variant_id' => $variant->id,
                 'product_id' => $variant->product_id,
                 'name' => $variant->product->name,
@@ -1567,22 +1662,164 @@ class ECommerceService
         $this->recalculateCartTotal();
         return $this->getCart();
     }
+    
+    /**
+     * Update addon quantity in cart
+     */
+    public function updateAddonInCart(string $itemId, array $addon, int $qty): array
+    {
+        $qty = max(1, (int)$qty);
+        
+        if ($this->isAuthenticated()) {
+            return DB::transaction(function () use ($itemId, $addon, $qty) {
+                $userId = $this->getCurrentUser()->id;
+                $sessionItems = Session::get('cart.items', []);
+                $snapshot = $sessionItems[$itemId] ?? null;
+                if (!$snapshot) return $this->getCart();
 
-    public function removeCartItem(string $itemId): array
+                $cartItem = CartItem::query()
+                    ->where('user_id', $userId)
+                    ->where('variant_id', $snapshot['variant_id'] ?? 0)
+                    ->first();
+                if (!$cartItem) return $this->getCart();
+
+                // Update the addon quantity in DB
+                $cartAddon = CartAddon::query()
+                    ->where('cart_item_id', $cartItem->id)
+                    ->where('addon_variant_id', $addon['variant_id'])
+                    ->first();
+                
+                if ($cartAddon) {
+                    $cartAddon->quantity = $qty;
+                    $cartAddon->save();
+                }
+
+                $this->syncSessionFromDb($userId);
+                return $this->getCart();
+            });
+        }
+
+        // Guest flow
+        $sessionToken = Session::get('guest.session_token');
+        if (!$sessionToken) return $this->getCart();
+
+        return DB::transaction(function () use ($itemId, $addon, $qty, $sessionToken) {
+            $sessionItems = Session::get('cart.items', []);
+            $snapshot = $sessionItems[$itemId] ?? null;
+            if (!$snapshot) return $this->getCart();
+
+            $guestCartItem = GuestCartItem::query()
+                ->where('session_token', $sessionToken)
+                ->where('variant_id', $snapshot['variant_id'] ?? 0)
+                ->first();
+            if (!$guestCartItem) return $this->getCart();
+
+            // Update the addon quantity in DB
+            $guestAddon = GuestCartAddon::query()
+                ->where('guest_cart_item_id', $guestCartItem->id)
+                ->where('addon_variant_id', $addon['variant_id'])
+                ->first();
+            
+            if ($guestAddon) {
+                $guestAddon->quantity = $qty;
+                $guestAddon->save();
+            }
+
+            $this->syncGuestSessionFromDb($sessionToken);
+            return $this->getCart();
+        });
+    }
+    
+    /**
+     * Remove addon from cart
+     */
+    public function removeAddonFromCart(string $itemId, array $addon): array
     {
         if ($this->isAuthenticated()) {
-            return DB::transaction(function () use ($itemId) {
+            return DB::transaction(function () use ($itemId, $addon) {
+                $userId = $this->getCurrentUser()->id;
+                $sessionItems = Session::get('cart.items', []);
+                $snapshot = $sessionItems[$itemId] ?? null;
+                if (!$snapshot) return $this->getCart();
+
+                $cartItem = CartItem::query()
+                    ->where('user_id', $userId)
+                    ->where('variant_id', $snapshot['variant_id'] ?? 0)
+                    ->first();
+                if (!$cartItem) return $this->getCart();
+
+                // Delete the addon from DB
+                CartAddon::query()
+                    ->where('cart_item_id', $cartItem->id)
+                    ->where('addon_variant_id', $addon['variant_id'])
+                    ->delete();
+
+                $this->syncSessionFromDb($userId);
+                return $this->getCart();
+            });
+        }
+
+        // Guest flow
+        $sessionToken = Session::get('guest.session_token');
+        if (!$sessionToken) return $this->getCart();
+
+        return DB::transaction(function () use ($itemId, $addon, $sessionToken) {
+            $sessionItems = Session::get('cart.items', []);
+            $snapshot = $sessionItems[$itemId] ?? null;
+            if (!$snapshot) return $this->getCart();
+
+            $guestCartItem = GuestCartItem::query()
+                ->where('session_token', $sessionToken)
+                ->where('variant_id', $snapshot['variant_id'] ?? 0)
+                ->first();
+            if (!$guestCartItem) return $this->getCart();
+
+            // Delete the addon from DB
+            GuestCartAddon::query()
+                ->where('guest_cart_item_id', $guestCartItem->id)
+                ->where('addon_variant_id', $addon['variant_id'])
+                ->delete();
+
+            $this->syncGuestSessionFromDb($sessionToken);
+            return $this->getCart();
+        });
+    }
+
+    public function removeCartItem(string $itemId, int $catalogId): array
+    {
+        if ($this->isAuthenticated()) {
+            return DB::transaction(function () use ($itemId, $catalogId) {
                 $userId = $this->getCurrentUser()->id;
                 $sessionItems = Session::get('cart.items', []);
                 $snapshot = $sessionItems[$itemId] ?? null;
                 if ($snapshot) {
+                    if($catalogId == CatalogEnum::PRODUCT->value) {
                     $cartItem = CartItem::query()
                         ->where('user_id', $userId)
-                        ->where('variant_id', $snapshot['variant_id'] ?? 0)
-                        ->first();
-                    if ($cartItem) {
-                        // New flow: no reservation at cart time, just delete cart row
-                        $cartItem->delete();
+                            ->where('variant_id', $snapshot['variant_id'] ?? 0)
+                            ->first();
+                        if ($cartItem) {
+                            // New flow: no reservation at cart time, just delete cart row
+                            $cartItem->delete();
+                        }
+                    }
+                    if($catalogId == CatalogEnum::ROOM_BOOKING->value) {
+                        //dd($userId, $snapshot);
+                        $cartItem = CartItem::query()
+                            ->where('user_id', $userId)
+                            ->where('id', $snapshot['cart_item_id'] ?? 0)
+                            ->first();
+                       // dd($cartItem);
+                        if ($cartItem) {
+                            $cartItem->delete();
+                        }
+
+                        $roomDetails = CartRoomDetail::query()
+                            ->where('cart_item_id', $cartItem->id)
+                            ->first();
+                        if ($roomDetails) {
+                            $roomDetails->delete();
+                        }
                     }
                 }
                 $this->syncSessionFromDb($userId);
@@ -1603,9 +1840,9 @@ class ECommerceService
                     ->where('variant_id', $snapshot['variant_id'] ?? 0)
                     ->lockForUpdate()
                     ->first();
-                if ($guest) {
-                    $guest->delete();
-                }
+                    if ($guest) {
+                        $guest->delete();
+                    }
             });
         }
 
@@ -1648,13 +1885,17 @@ class ECommerceService
     private function syncSessionFromDbItems($dbItems, string $idPrefix = 'db_'): void
     {
         $sessionItems = [];
+        
         foreach ($dbItems as $ci) {
-            if($ci->catalog_id != 1) continue; // only sync catalog 1 items
+           
+            // Include normal ecommerce items (catalog_id 1 or null/legacy) and skip only room-booking (3)
+            if ((int)($ci->catalog_id ?? 1) === 3) continue; // handle room items in separate pass
             $variant = $ci->variant;
-            if (!$variant) continue;
-            $price = (float) $variant->selling_price;
+            $product = $ci->product;
+            // If neither variant nor product available, skip
+            if (!$variant && !$product) continue;
+            $price = $variant ? (float) $variant->selling_price : (float) ($product->selling_price ?? 0);
             $itemId = $idPrefix . $ci->id; // deterministic id mapping for session snapshot
-
             // Build addon pricing snapshot
             $addons = [];
             foreach ($ci->addons as $ad) {
@@ -1688,8 +1929,14 @@ class ECommerceService
             }
 
             // Get primary image for the cart item (ensure URL via ImageService)
-            $primaryImage = $variant->getPrimaryImage();
-            $imageUrl = $primaryImage ? ImageService::getImageUrl($primaryImage->file_path ?: $primaryImage->file_url) : null;
+            $imageUrl = null;
+            if ($variant) {
+                $primaryImage = $variant->getPrimaryImage();
+                $imageUrl = $primaryImage ? ImageService::getImageUrl($primaryImage->file_path ?: $primaryImage->file_url) : null;
+            } elseif (method_exists($product, 'getPrimaryImage')) {
+                $primaryImage = $product->getPrimaryImage();
+                $imageUrl = $primaryImage ? ImageService::getImageUrl($primaryImage->file_path ?? $primaryImage) : null;
+            }
 
             // Calculate discount information
             $comparePrice = $variant->compare_price ? (float) $variant->compare_price : null;
@@ -1704,10 +1951,10 @@ class ECommerceService
             $sessionItems[$itemId] = [
                 'id' => $itemId,
                 'catalog_id' => 1,
-                'variant_id' => $variant->id,
-                'product_id' => $variant->product_id,
-                'name' => optional($variant->product)->name,
-                'variant_display_name' => self::formatVariantName($variant->variant_attributes ?? []),
+                'variant_id' => $variant->id ?? null,
+                'product_id' => $variant->product_id ?? ($product->id ?? null),
+                'name' => $variant ? (optional($variant->product)->name) : ($product->name ?? 'Item'),
+                'variant_display_name' => $variant ? self::formatVariantName($variant->variant_attributes ?? []) : null,
                 'qty' => (int)$ci->quantity,
                 'unit_price' => $price,
                 'subtotal' => $price * (int)$ci->quantity,
@@ -1716,11 +1963,11 @@ class ECommerceService
                 'saved_amount' => $savedAmount,
                 'image_url' => $imageUrl,
                 'addons' => $addons,
-                'shippable' => (bool) $variant->product->shippable,
-                'availability_status' => $this->calculateAvailabilityStatus($variant, (int)$ci->quantity),
-                // Backorder indicator from DB; split computed from stock only (no reserved quantity tracked on cart rows)
-                'is_backorder' => $this->calculateAvailabilityStatus($variant, (int)$ci->quantity) !== 'in_stock',
-                'backorder_qty' => ($variant->track_inventory && $variant->allow_backorders)
+                'shippable' => (bool) ($variant ? $variant->product->shippable : ($product->shippable ?? false)),
+                'availability_status' => $variant ? $this->calculateAvailabilityStatus($variant, (int)$ci->quantity) : 'in_stock',
+                // Backorder indicator from DB only for variants
+                'is_backorder' => $variant ? ($this->calculateAvailabilityStatus($variant, (int)$ci->quantity) !== 'in_stock') : false,
+                'backorder_qty' => $variant && $variant->track_inventory && $variant->allow_backorders
                     ? max(0, (int)$ci->quantity - min((int)$ci->quantity, (int)$variant->availableStock()))
                     : 0,
             ];
@@ -1729,7 +1976,7 @@ class ECommerceService
         // Sync for room booking items
         
         foreach ($dbItems as $ci) {
-            if($ci->catalog_id != 2) continue; // only sync catalog 2 items
+            if($ci->catalog_id != 3) continue; // only sync catalog 3 items
 
             $roomDetails = $ci->roomDetails;
             if (!$roomDetails) continue;
@@ -1740,21 +1987,19 @@ class ECommerceService
             $primaryImage = $roomDetails->room ? $roomDetails->room->getPrimaryImage() : null;
             $imageUrl = $primaryImage ? (is_string($primaryImage) ? $primaryImage : (\App\Services\ImageService::getImageUrl($primaryImage))) : null;
 
-
-
-            $itemId = $idPrefix . $roomDetails->id; // deterministic id mapping for session snapshot
-
+            $itemId = $idPrefix ."room_".$roomDetails->id; // deterministic id mapping for session snapshot
             $sessionItems[$itemId] = [
                 'id' => $itemId,
-                'catalog_id' => 2,
+                'cart_item_id' => $roomDetails->cart_item_id,
+                'catalog_id' => CatalogEnum::ROOM_BOOKING->value,
                 'image_url' => $imageUrl,
                 'variant_id' => null,
-                'product_id' => null,
+                'product_id' => $roomDetails->room_id,
                 'name' => $roomDetails->room->name,
                 'variant_display_name' => null,
                 'qty' => (int)$roomDetails->pet_quantity,
                 'unit_price' => $roomDetails->room_price,
-                'subtotal' => $roomDetails->room_price * (int)$roomDetails->pet_quantity,
+                'subtotal' => $roomDetails->total_price,
                 'compare_price' => null,
                 'discount_percent' => 0,
                 'saved_amount' => 0,
@@ -1766,7 +2011,6 @@ class ECommerceService
                 'backorder_qty' => 0,
             ];
         }
-
         Session::put('cart.items', $sessionItems);
         $this->recalculateCartTotal();
     }
@@ -2016,7 +2260,7 @@ class ECommerceService
         DB::statement('
             INSERT INTO guest_cart_items (session_token, product_id, variant_id, quantity, expires_at, availability_status, created_at, updated_at)
             VALUES (?, ?, ?, ?, ?, ?, now(), now())
-            ON CONFLICT (session_token, product_id, variant_id)
+            ON CONFLICT (session_token, variant_id)
             DO UPDATE SET
                 quantity    = EXCLUDED.quantity,
                 expires_at  = EXCLUDED.expires_at,

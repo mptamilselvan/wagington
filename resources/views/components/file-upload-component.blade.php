@@ -27,15 +27,33 @@
         <div id="error_{{ $wireModel }}" class="mt-2 error-message">{{ $error }}</div>
     @endif
 
+    @php
+        $file = data_get($this, $wireModel);
+    @endphp
+
+
     <!-- Show preview -->
-    @if (!empty($this->{$wireModel}))
-        {{-- If new file is chosen --}}
-        @if (Str::startsWith($this->{$wireModel}->getMimeType(), 'image/'))
-            <img src="{{ $this->{$wireModel}->temporaryUrl() }}" class="w-40">
-        @else
-            <div class="flex items-center justify-center w-20 h-20 bg-gray-200 rounded">
-                <i class="fa-solid fa-file"></i>
-            </div>
+    @if (!empty($file))
+        @if ($file instanceof \Livewire\Features\SupportFileUploads\TemporaryUploadedFile)
+            {{-- New uploaded file --}}
+            @if (Str::startsWith($file->getMimeType(), 'image/'))
+                <img src="{{ $file->temporaryUrl() }}" class="object-cover w-20 h-20 rounded">
+            @else
+                <div class="flex items-center justify-center w-20 h-20 bg-gray-200 rounded">
+                    <i class="fa-solid fa-file"></i>
+                </div>
+            @endif
+        @elseif (is_string($file))
+            {{-- Existing file path (edit mode) --}}
+            @if (Str::endsWith($file, ['.jpg', '.jpeg', '.png', '.gif']))
+                <img src="{{ env('DO_SPACES_URL').'/'.$file }}" class="object-cover w-20 h-20 rounded">
+            @elseif (Str::endsWith($file, '.pdf'))
+                <a href="{{ env('DO_SPACES_URL').'/'.$file }}" target="_blank">
+                    <div class="flex items-center justify-center w-20 h-20 bg-gray-200 rounded">
+                        <i class="fa-solid fa-file"></i>
+                    </div>
+                </a>
+            @endif
         @endif
         
         {{-- Other file types --}}

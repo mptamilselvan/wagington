@@ -17,7 +17,7 @@
     // When Livewire re-renders, $$model may not be an array yet
     $newList = isset($$model) && is_array($$model) ? $$model : [];
     $currentTotal = $existingCount + count($newList);
-    $maxCount = 5;
+    $maxCount = $maxCount ?? 5;
 @endphp
 
 <div class="md:col-span-2">

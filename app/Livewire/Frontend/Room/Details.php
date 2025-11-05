@@ -17,9 +17,7 @@ class Details extends Component
     public $hasMoreRelated = true;
     protected ?RoomService $roomService = null;
 
-    // Pricing options
-    public $priceOptions = [];
-    public $selectedPriceOptionId = null;
+    // Pricing - only show price for no_of_days = 1
     public $selectedPrice = null;
 
     public function mount($slug = null)
@@ -91,30 +89,15 @@ class Details extends Component
 
     private function loadPriceOptions(): void
     {
-        $options = \App\Models\Room\RoomPriceOptionModel::where('room_type_id', $this->roomType->id)
-            ->orderBy('no_of_days')
-            ->get(['id','label','no_of_days','price']);
-        $this->priceOptions = $options->map(function($opt){
-            return [
-                'value' => $opt->id,
-                'option' => ($opt->no_of_days . ' ' . ($opt->label ?? 'D')),
-                'price' => $opt->price,
-            ];
-        })->toArray();
-
-        if (!empty($this->priceOptions)) {
-            $this->selectedPriceOptionId = $this->priceOptions[0]['value'];
-            $this->selectedPrice = $this->priceOptions[0]['price'];
-        }
-    }
-
-    public function updatedSelectedPriceOptionId($value): void
-    {
-        foreach ($this->priceOptions as $opt) {
-            if ((int)$opt['value'] === (int)$value) {
-                $this->selectedPrice = $opt['price'];
-                break;
-            }
+        // Only load price for no_of_days = 1
+        $priceOption = \App\Models\Room\RoomPriceOptionModel::where('room_type_id', $this->roomType->id)
+            ->where('no_of_days', 1)
+            ->first(['id','price']);
+        
+        if ($priceOption) {
+            $this->selectedPrice = $priceOption->price;
+        } else {
+            $this->selectedPrice = null;
         }
     }
 

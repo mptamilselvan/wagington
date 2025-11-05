@@ -23,6 +23,7 @@
             ['key' => 'peak-seasons', 'value' => 'Peak Season', 'route' => route('peak-season')],
             ['key' => 'off-days', 'value' => 'Off Days', 'route' => route('off-days')],
             ['key' => 'booking-status-settings', 'value' => 'Booking stattus setting', 'route' => route('admin.booking-status-settings')],
+            ['key' => 'service-type', 'value' => 'Service Type', 'route' => route('admin.service-types')],
         ],
         'active' => 'admin.service-category',
     ])

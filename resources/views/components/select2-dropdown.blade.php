@@ -8,11 +8,11 @@
         </label>
 
         @endif
-    <select class="select2-example form-select" @if(isset($multiple) && $multiple==true) multiple @endif  id="{{$id}}"  @if(isset($disabled) && $disabled==true) disabled @endif name="{{$wireModel}}"
+    <select class="select2-example form-select" @if(isset($multiple) && $multiple==true) multiple @endif  id="{{$id}}" disabled="disabled"  @if(isset($disabled) && $disabled==true) disabled @endif name="{{$wireModel}}"
      @if(!isset($isDefer)) wire:model.defer="{{$wireModel}}" @else
         wire:model="{{$wireModel}}" @endif 
         @if(isset($onchangeFn)) onchange="{{$onchangeFn}}" @endif
-        @if(isset($wireChangeFn)) wire:change="{{$wireChangeFn}}" @endif autocomplete="" data-model="{{$wireModel }}">
+        @if(isset($wireChangeFn)) wire:change="{{$wireChangeFn}}" @endif @if(isset($wireBlurfn)) wire:blur="{{$wireBlurfn}}" @endif autocomplete="" data-model="{{$wireModel }}">
         @foreach ($options as $option)
             <option value="{{ $option['value'] }}">{{ $option['option'] }}</option>
         @endforeach

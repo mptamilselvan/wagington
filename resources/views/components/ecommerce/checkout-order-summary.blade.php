@@ -187,6 +187,12 @@ use App\Helpers\CurrencyHelper;
                         Add another coupon ({{ count($appliedCoupons) }}/{{ $maxCoupons }})
                     @endif
                 </label>
+                <div class="flex items-center justify-between mb-1">
+                    <div class="flex-1"></div>
+                    <a href="{{ route('promo-wallet') }}" class="text-xs text-blue-600 hover:text-blue-800 underline">
+                        Select coupon
+                    </a>
+                </div>
                 <div class="flex gap-2">
                     <input 
                         type="text" 

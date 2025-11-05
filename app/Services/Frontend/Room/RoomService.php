@@ -871,54 +871,50 @@ class RoomService
         $petLines = [];
         $sizeMap = Size::whereIn('id', $selectedSizeIds)->get(['id', 'name'])->keyBy('id');
 
-        // Get prices for the number of days
-        $prices = RoomPriceOptionModel::where('room_type_id', $roomType->id)
-            ->whereIn('pet_size_id', $selectedSizeIds)
-            ->where('no_of_days', $days)
-            ->get(['pet_size_id', 'price']);
-
-        // Fallback to 1-day prices if exact days not configured
-        $prices1d = collect();
-        if ($days !== 1) {
-            $prices1d = RoomPriceOptionModel::where('room_type_id', $roomType->id)
-                ->whereIn('pet_size_id', $selectedSizeIds)
-                ->where('no_of_days', 1)
-                ->get(['pet_size_id', 'price']);
-        }
-
         foreach ($selectedPets as $pet) {
             $sid = (int)$pet->pet_size_id;
             if (!$sid) continue;
 
             $sizeName = $sizeMap->get($sid)?->name ?? 'Unknown';
-            $row = $prices->firstWhere('pet_size_id', $sid);
-            $base = (float)($row->price ?? 0);
-
-            // Fallback to 1-day price if needed
-            if ($base <= 0 && $days > 1 && $prices1d->isNotEmpty()) {
-                $row1 = $prices1d->firstWhere('pet_size_id', $sid);
-                $base = (float)($row1->price ?? 0) * $days;
+            
+            // Find the price option with maximum no_of_days that is <= user's selected days
+            // First try exact match
+            $priceOption = RoomPriceOptionModel::where('room_type_id', $roomType->id)
+                ->where('pet_size_id', $sid)
+                ->where('no_of_days', $days)
+                ->first(['price', 'no_of_days']);
+            
+            // If no exact match, find the maximum no_of_days <= selected days
+            if (!$priceOption || (float)$priceOption->price <= 0) {
+                $priceOption = RoomPriceOptionModel::where('room_type_id', $roomType->id)
+                    ->where('pet_size_id', $sid)
+                    ->where('no_of_days', '<=', $days)
+                    ->orderByDesc('no_of_days')
+                    ->first(['price', 'no_of_days']);
             }
-
-            // Additional fallbacks
-            if ($base <= 0) {
-                $rowDays = RoomPriceOptionModel::where('room_type_id', $roomType->id)
-                    ->where('no_of_days', $days)
-                    ->orderByDesc('price')
-                    ->first(['price']);
-                if ($rowDays && (float)$rowDays->price > 0) {
-                    $base = (float)$rowDays->price;
-                }
-            }
-
-            if ($base <= 0) {
-                $rowAny = RoomPriceOptionModel::where('room_type_id', $roomType->id)
+            
+            // If still no match, try without pet_size_id filter (fallback)
+            if (!$priceOption || (float)$priceOption->price <= 0) {
+                $priceOption = RoomPriceOptionModel::where('room_type_id', $roomType->id)
+                    ->where('no_of_days', '<=', $days)
                     ->orderByDesc('no_of_days')
                     ->orderByDesc('price')
                     ->first(['price', 'no_of_days']);
-                if ($rowAny && (float)$rowAny->price > 0) {
-                    $base = (int)($rowAny->no_of_days ?? 1) === 1 ? ((float)$rowAny->price * $days) : (float)$rowAny->price;
-                }
+            }
+            
+            // If still no match, get any price option (final fallback)
+            if (!$priceOption || (float)$priceOption->price <= 0) {
+                $priceOption = RoomPriceOptionModel::where('room_type_id', $roomType->id)
+                    ->orderByDesc('no_of_days')
+                    ->orderByDesc('price')
+                    ->first(['price', 'no_of_days']);
+            }
+            
+            $base = (float)($priceOption->price ?? 0);
+            
+            // Multiply the base price by user's selected number of days
+            if ($base > 0) {
+                $base = $base * $days;
             }
 
             $final = $base;

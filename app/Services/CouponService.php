@@ -68,11 +68,35 @@ class CouponService
                 ];
             }
 
-            $response = Http::withToken($token)
-                ->timeout($timeout)
-                ->post("{$baseUrl}/api/promotion/validate-voucher-code", [
-                    'voucher_code' => $couponCode
+            try {
+                $response = Http::withToken($token)
+                    ->timeout($timeout)
+                    ->connectTimeout(3)
+                    ->post("{$baseUrl}/api/promotion/validate-voucher-code", [
+                        'voucher_code' => $couponCode,
+                        'subtotal' => $subtotal
+                    ]);
+            } catch (\Illuminate\Http\Client\ConnectionException $e) {
+                Log::error('CouponService: Connection error while validating voucher', [
+                    'error' => $e->getMessage(),
+                    'coupon_code' => $couponCode
                 ]);
+                return [
+                    'valid' => false,
+                    'discount' => 0,
+                    'message' => 'Unable to validate coupon. Please try again.'
+                ];
+            } catch (\Throwable $e) {
+                Log::error('CouponService: Error during voucher validation request', [
+                    'error' => $e->getMessage(),
+                    'coupon_code' => $couponCode
+                ]);
+                return [
+                    'valid' => false,
+                    'discount' => 0,
+                    'message' => 'An error occurred while validating the coupon'
+                ];
+            }
 
             if ($response->failed()) {
                 return [
@@ -215,8 +239,14 @@ class CouponService
      */
     private function getAuthToken(): ?string
     {
-        // Get the JWT token for the authenticated user
         try {
+            // Try to get existing token from the request
+            $token = JWTAuth::getToken();
+            if ($token) {
+                return $token->get();
+            }
+            
+            // Fallback: parse from request if available
             if (Auth::check()) {
                 return JWTAuth::fromUser(Auth::user());
             }

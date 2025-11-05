@@ -1,5 +1,4 @@
 <main class="py-10 lg:pl-72 bg-gray-50">
-
     {{-- top title bar --}}
     <div class="px-4 mx-3 bg-white sm:px-6 lg:px-4">
         <div class="h-20 md:flex md:items-center md:justify-between">
@@ -46,7 +45,8 @@
                             'star' => true,
                             'placeholder' => 'Enter label',
                             'error' => $errors->first('title'),
-                            ])
+                            'disabled' => true,
+                        ])
                         @endcomponent
                     </div>
                     <div>
@@ -56,7 +56,7 @@
                             'label' => 'No. of Days',
                             'star' => true,
                             'error' => $errors->first('no_of_days'),
-                            ])
+                        ])
                         @endcomponent
                     </div>
                     <div class="mt-3">
@@ -66,11 +66,11 @@
                             'label' => 'Price',
                             'star' => true,
                             'error' => $errors->first('price'),
-                            ])
+                        ])
                         @endcomponent
                     </div>
 
-                      <div class="mt-3">
+                    <div class="mt-3">
                         @component('components.dropdown-component', [
                             'wireModel' => 'pet_size_id',
                             'id' => 'petSizeId',
@@ -82,13 +82,13 @@
                         ])
                         @endcomponent
                     </div>
-                   
-                    
+
+
                 </div>
-                            
+
             </div>
 
-           
+
 
             <!-- Buttons -->
             <div class="flex items-center justify-end gap-2 mt-10">
@@ -97,18 +97,18 @@
                     'id' => 'clear',
                     'type' => 'cancelSmall',
                     'wireClickFn' => 'resetFields',
-                    ])
+                ])
                 @endcomponent
                 @component('components.button-component', [
                     'label' => 'Save',
                     'id' => 'save',
                     'type' => 'submitSmall',
                     'wireClickFn' => 'save',
-                    ])
+                ])
                 @endcomponent
             </div>
 
-            <hr class="mt-10 border-gray-300"> 
+            <hr class="mt-10 border-gray-300">
             <div class="mt-[28px] table-wrapper overflow-visible">
                 @php
                     $selectedRoomTypeName = null;
@@ -117,8 +117,11 @@
                         $selectedRoomTypeName = $match['option'] ?? null;
                     }
                 @endphp
-                <h4 class="mb-4 text-lg">Submissions @if($selectedRoomTypeName) <span class="text-gray-500">— {{ $selectedRoomTypeName }}</span>@endif</h4>
-                    
+                <h4 class="mb-4 text-lg">Submissions @if ($selectedRoomTypeName)
+                        <span class="text-gray-500">— {{ $selectedRoomTypeName }}</span>
+                    @endif
+                </h4>
+
                 <table class="min-w-full bg-white table-auto">
                     <thead class="">
                         <tr>
@@ -130,7 +133,7 @@
                         </tr>
                     </thead>
                     <tbody>
-                    
+
                         @foreach ($data as $roomPriceOption)
                             <tr class="border-t">
                                 <td class="td">{{ $roomPriceOption->label }}</td>
@@ -140,7 +143,7 @@
                                 <td class="td">
                                     @component('components.three-dots-trigger', [
                                         'menuItems' => [
-                                            ['label' => 'Edit', 'wireFn' => "edit($roomPriceOption->id)"],                                               
+                                            ['label' => 'Edit', 'wireFn' => "edit($roomPriceOption->id)"],
                                             ['label' => 'Delete', 'wireFn' => "deletePopUp($roomPriceOption->id)"],
                                         ],
                                     ])
@@ -156,28 +159,28 @@
     {{-- delete pop up --}}
     @if ($popUp == true)
         @component('components.popUpFolder.statusPopUp')
-        @slot('content')
-            Are you sure you want to delete the record?
-        @endslot
-        @slot('footer')
-            <div class="flex items-center justify-end gap-2 mt-5">
-                @component('components.button-component', [
-                    'label' => 'Cancel',
-                    'id' => 'cancel',
-                    'type' => 'cancelSmall',
-                    'wireClickFn' => '$set("popUp", false)',
-                ])
-                @endcomponent
+            @slot('content')
+                Are you sure you want to delete the record?
+            @endslot
+            @slot('footer')
+                <div class="flex items-center justify-end gap-2 mt-5">
+                    @component('components.button-component', [
+                        'label' => 'Cancel',
+                        'id' => 'cancel',
+                        'type' => 'cancelSmall',
+                        'wireClickFn' => '$set("popUp", false)',
+                    ])
+                    @endcomponent
 
-                @component('components.button-component', [
-                    'label' => 'Delete',
-                    'id' => 'delete',
-                    'type' => 'buttonSmall',
-                    'wireClickFn' => 'delete',
-                ])
-                @endcomponent
-            </div>
-        @endslot
+                    @component('components.button-component', [
+                        'label' => 'Delete',
+                        'id' => 'delete',
+                        'type' => 'buttonSmall',
+                        'wireClickFn' => 'delete',
+                    ])
+                    @endcomponent
+                </div>
+            @endslot
         @endcomponent
     @endif
     {{-- delete pop up end --}}
